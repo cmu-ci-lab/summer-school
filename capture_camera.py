@@ -35,8 +35,17 @@ class AVTCamera:
     def connect(self):
         self._vmb = vmbpy.VmbSystem.get_instance().__enter__()
 
-        raw = self._find_by_ip(self.ip) if self.ip else self._find_by_vendor()
-        self._cam = raw.__enter__()
+        try:
+            raw = self._find_by_ip(self.ip) if self.ip else self._find_by_vendor()
+            self._cam = raw.__enter__()
+        except Exception:
+            # VmbSystem was started — shut it down so its threads don't block the process
+            try:
+                self._vmb.__exit__(None, None, None)
+            except Exception:
+                pass
+            self._vmb = None
+            raise
 
         is_gige = self._is_gige()
         transport = "GigE" if is_gige else "USB"

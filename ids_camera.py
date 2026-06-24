@@ -96,7 +96,7 @@ class IDSCamera:
         if self._hcam is None:
             return
         try:
-            ueye.is_StopLiveVideo(self._hcam, ueye.IS_WAIT)
+            ueye.is_StopLiveVideo(self._hcam, ueye.IS_FORCE_VIDEO_STOP)
         except Exception:
             pass
         if self._mem_ptr is not None:

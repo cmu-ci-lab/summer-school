@@ -216,7 +216,30 @@ class AVTCamera:
             f"Run: [print(f.get_name()) for f in cam._cam.get_all_features()] to inspect."
         )
 
+    def _set_best_mono_pixel_format(self):
+        """Set the highest monochrome pixel format the camera natively supports."""
+        preferred = [
+            vmbpy.PixelFormat.Mono16,
+            vmbpy.PixelFormat.Mono12,
+            vmbpy.PixelFormat.Mono10,
+            vmbpy.PixelFormat.Mono8,
+        ]
+        feat = getattr(self._cam, "PixelFormat", None)
+        if feat is None:
+            print("Warning: PixelFormat feature not found — using camera default.")
+            return
+        for fmt in preferred:
+            try:
+                feat.set(fmt)
+                print(f"Pixel format: {fmt}")
+                return
+            except Exception:
+                pass
+        print("Warning: could not set a monochrome pixel format — using camera default.")
+
     def _apply_settings(self):
+        self._set_best_mono_pixel_format()
+
         # Auto-off: try both SFNC 2.x and older SFNC 1.x names
         try:
             self._set_feature("ExposureAuto", value="Off")

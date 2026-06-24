@@ -43,6 +43,8 @@ class IDSCamera:
         self._mem_id = None
         self._width = None
         self._height = None
+        self._bits_per_pixel = 8
+        self._dtype = np.uint8
         self._buffer: list[np.ndarray] = []
 
     # ------------------------------------------------------------------
@@ -65,11 +67,22 @@ class IDSCamera:
         name = sensor.strSensorName.decode()
         print(f"Connected [IDS uEye]: {name}  {self._width}x{self._height}")
 
-        ueye.is_SetColorMode(self._hcam, ueye.IS_CM_BGR8_PACKED)
+        # Try monochrome modes from highest to lowest native bit depth
+        _MONO_MODES = [
+            (ueye.IS_CM_MONO12, 16, np.uint16),
+            (ueye.IS_CM_MONO10, 16, np.uint16),
+            (ueye.IS_CM_MONO8,   8, np.uint8),
+        ]
+        for mode, bpp, dtype in _MONO_MODES:
+            if ueye.is_SetColorMode(self._hcam, mode) == ueye.IS_SUCCESS:
+                self._bits_per_pixel = bpp
+                self._dtype = dtype
+                print(f"Color mode: MONO{bpp if bpp == 8 else bpp} ({dtype.__name__})")
+                break
 
         self._mem_ptr = ueye.c_mem_p()
         self._mem_id  = ueye.int()
-        ueye.is_AllocImageMem(self._hcam, self._width, self._height, 24,
+        ueye.is_AllocImageMem(self._hcam, self._width, self._height, self._bits_per_pixel,
                               self._mem_ptr, self._mem_id)
         ueye.is_SetImageMem(self._hcam, self._mem_ptr, self._mem_id)
 
@@ -137,7 +150,7 @@ class IDSCamera:
     # ------------------------------------------------------------------
 
     def capture(self) -> np.ndarray:
-        """Capture one frame and return it as an HxWx3 uint8 RGB numpy array."""
+        """Capture one frame and return it as an HxW monochrome numpy array (uint8 or uint16)."""
         if self._hcam is None:
             raise RuntimeError("Camera not connected. Call connect() first.")
 
@@ -145,11 +158,11 @@ class IDSCamera:
         if ret != ueye.IS_SUCCESS:
             raise RuntimeError(f"is_FreezeVideo failed (code {ret}).")
 
-        arr = np.zeros((self._height, self._width, 3), dtype=np.uint8)
+        arr = np.zeros((self._height, self._width), dtype=self._dtype)
         ueye.is_CopyImageMem(self._hcam, self._mem_ptr, self._mem_id,
                              arr.ctypes.data_as(ctypes.POINTER(ctypes.c_char)))
 
-        return arr[:, :, ::-1].copy()  # BGR → RGB
+        return arr.copy()
 
     def capture_to_buffer(self) -> np.ndarray:
         """Capture one frame into the internal buffer. Call save_stack() when done."""

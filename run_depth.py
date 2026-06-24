@@ -4,7 +4,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 # ── Settings ──────────────────────────────────────────────────────────────────
-STACK_PATH = Path("coin_captures_ids_black/stack.npy")
+STACK_PATH = Path("coin_captures_ids_3250/stack.npy")
 
 # ──────────────────────────────────────────────────────────────────────────────
 

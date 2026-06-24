@@ -6,7 +6,7 @@ from camera import Camera
 stage = ThorlabsStage(units="mm")
 stage.connect()
 
-cam = Camera(exposure_us=15000, gain_db=0.0, save_dir="coin_captures_ids_black")
+cam = Camera(exposure_us=15000, gain_db=0.0, save_dir="coin_captures_ids_3250")
 cam.connect()
 
 #%%

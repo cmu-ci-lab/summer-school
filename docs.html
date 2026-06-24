@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ICCP 2026 — Depth-from-Focus Acquisition System</title>
+  <style>
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --accent:   #5b8af5;
+      --accent2:  #a78bfa;
+      --green:    #34d399;
+      --yellow:   #fbbf24;
+      --red:      #f87171;
+      --text:     #e2e8f0;
+      --muted:    #94a3b8;
+      --code-bg:  #141720;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    /* ── Layout ── */
+    .layout { display: flex; min-height: 100vh; }
+
+    nav {
+      width: 240px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 32px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    nav .logo {
+      padding: 0 24px 24px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    nav a {
+      display: block;
+      padding: 6px 24px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13.5px;
+      border-left: 2px solid transparent;
+      transition: all .15s;
+    }
+    nav a:hover { color: var(--text); border-left-color: var(--accent); background: rgba(91,138,245,.06); }
+    nav .nav-section {
+      padding: 16px 24px 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      opacity: .6;
+    }
+
+    main {
+      flex: 1;
+      max-width: 860px;
+      padding: 48px 56px 80px;
+    }
+
+    /* ── Typography ── */
+    h1 { font-size: 2rem; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    h2 { font-size: 1.35rem; font-weight: 600; color: #fff; margin: 48px 0 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.05rem; font-weight: 600; color: var(--accent2); margin: 28px 0 10px; }
+    p  { color: var(--text); margin-bottom: 14px; }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: .04em;
+    }
+    .badge-blue   { background: rgba(91,138,245,.15);  color: var(--accent); }
+    .badge-purple { background: rgba(167,139,250,.15); color: var(--accent2); }
+    .badge-green  { background: rgba(52,211,153,.15);  color: var(--green); }
+    .badge-yellow { background: rgba(251,191,36,.15);  color: var(--yellow); }
+
+    /* ── Workflow diagram ── */
+    .flow {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 24px 0;
+    }
+    .flow-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      text-align: center;
+      min-width: 120px;
+    }
+    .flow-step .icon { font-size: 20px; display: block; margin-bottom: 4px; }
+    .flow-step .label { color: var(--muted); font-size: 11px; }
+    .flow-arrow { color: var(--muted); font-size: 18px; }
+
+    /* ── File cards ── */
+    .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 20px 0; }
+    .file-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .file-card .filename { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; color: var(--accent); margin-bottom: 6px; }
+    .file-card p { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+    /* ── API table ── */
+    table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 13.5px; }
+    th { background: var(--surface); color: var(--muted); font-weight: 600; text-align: left; padding: 9px 12px; border-bottom: 2px solid var(--border); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    td code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 12.5px; color: var(--green); font-family: 'Cascadia Code', 'Fira Code', monospace; }
+    tr:last-child td { border-bottom: none; }
+
+    /* ── Code blocks ── */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 12px 0 20px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; }
+    pre code { color: var(--text); }
+
+    /* very light syntax colouring */
+    .kw  { color: #c792ea; }   /* keywords */
+    .fn  { color: #82aaff; }   /* function names */
+    .str { color: #c3e88d; }   /* strings */
+    .cm  { color: #546e7a; font-style: italic; } /* comments */
+    .num { color: #f78c6c; }   /* numbers */
+    .cl  { color: var(--yellow); } /* class names */
+
+    /* ── Callout boxes ── */
+    .callout {
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      font-size: 13.5px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .callout-info    { background: rgba(91,138,245,.1);  border-left: 3px solid var(--accent); }
+    .callout-warning { background: rgba(251,191,36,.1);  border-left: 3px solid var(--yellow); }
+    .callout-tip     { background: rgba(52,211,153,.1);  border-left: 3px solid var(--green); }
+
+    /* ── Inline code ── */
+    p code, li code, td code { background: var(--code-bg); padding: 1px 6px; border-radius: 3px; font-size: 12.5px; color: var(--green); }
+
+    ul, ol { padding-left: 20px; margin-bottom: 14px; }
+    li { margin-bottom: 4px; color: var(--text); }
+
+    hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ═══════════════════════════════════════════ SIDEBAR ════════════════════════ -->
+<nav>
+  <div class="logo">ICCP 2026</div>
+  <a href="#overview">Overview</a>
+  <a href="#setup">Environment Setup</a>
+  <a href="#hardware">Hardware</a>
+
+  <div class="nav-section">Modules</div>
+  <a href="#stage">ThorlabsStage</a>
+  <a href="#camera">AVTCamera</a>
+  <a href="#depth">Depth-from-Focus</a>
+
+  <div class="nav-section">Scripts</div>
+  <a href="#acquisition">Acquisition</a>
+  <a href="#processing">Processing</a>
+
+  <div class="nav-section">Setup</div>
+  <a href="#setup-env">Environment</a>
+  <a href="#docker">Docker?</a>
+
+  <div class="nav-section">Reference</div>
+  <a href="#api-stage">Stage API</a>
+  <a href="#api-camera">Camera API</a>
+  <a href="#api-depth">Depth API</a>
+</nav>
+
+<!-- ═══════════════════════════════════════════ MAIN ══════════════════════════ -->
+<main>
+
+  <h1>Depth-from-Focus Acquisition System</h1>
+  <p class="subtitle">ICCP 2026 Summer School — Python instrument control and depth reconstruction</p>
+
+  <div class="flow">
+    <div class="flow-step"><span class="icon">🔧</span>Stage<div class="label">KDC101 + Z825</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><span class="icon">📷</span>Camera<div class="label">AVT (USB)</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><span class="icon">🗂️</span>Stack<div class="label">.npy (H×W×N)</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><span class="icon">📐</span>Depth map<div class="label">argmax focus</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><span class="icon">🖼️</span>Images<div class="label">.npy + .png</div></div>
+  </div>
+
+  <div class="file-grid">
+    <div class="file-card"><div class="filename">stage.py</div><p>ThorlabsStage class — motor control in mm or m</p></div>
+    <div class="file-card"><div class="filename">capture_camera.py</div><p>AVTCamera class — capture, buffer, save</p></div>
+    <div class="file-card"><div class="filename">depth_from_focus.py</div><p>compute_mean_diff — focus-based depth reconstruction</p></div>
+    <div class="file-card"><div class="filename">move_stage.py</div><p>Acquisition script — sweep stage and build stack</p></div>
+    <div class="file-card"><div class="filename">run_depth.py</div><p>Processing script — load stack and output depth map</p></div>
+  </div>
+
+  <!-- ════════════ ENVIRONMENT ════════════ -->
+  <h2 id="setup-env">Environment Setup</h2>
+  <p>All code runs inside a project-local conda environment named <code>iccp</code>. Three files manage this:</p>
+  <div class="file-grid">
+    <div class="file-card"><div class="filename">environment.yml</div><p>Conda env spec — Python 3.12 + all pip dependencies</p></div>
+    <div class="file-card"><div class="filename">requirements.txt</div><p>Pip-only list for reference or non-conda installs</p></div>
+    <div class="file-card"><div class="filename">setup.sh</div><p>One-shot setup script (Git Bash on Windows)</p></div>
+  </div>
+
+  <h3>One-shot setup (Git Bash)</h3>
+<pre><code>./setup.sh</code></pre>
+  <p>The script will: create the <code>iccp</code> conda environment, install all pip packages, install <code>vmbpy</code> from the local Vimba X SDK wheel, and register the Jupyter kernel for VSCode.</p>
+
+  <h3>Manual setup</h3>
+<pre><code><span class="cm"># 1. Create environment</span>
+conda env create -f environment.yml
+
+<span class="cm"># 2. Install vmbpy from Vimba X SDK wheel</span>
+conda activate iccp
+pip install "C:/Program Files/Allied Vision/Vimba X/api/python/vmbpy-1.1.0-py3-none-win_amd64.whl"
+
+<span class="cm"># 3. Register Jupyter kernel (for VSCode interactive window)</span>
+python -m ipykernel install --user --name iccp --display-name "Python (iccp)"</code></pre>
+
+  <div class="callout callout-warning">
+    <span class="callout-icon">⚠️</span>
+    <div><strong>vmbpy is not on PyPI.</strong> It ships with the Vimba X SDK installer from Allied Vision. The wheel is at <code>C:\Program Files\Allied Vision\Vimba X\api\python\</code> after the SDK is installed.</div>
+  </div>
+
+  <h3>Key packages</h3>
+  <table>
+    <tr><th>Package</th><th>Purpose</th></tr>
+    <tr><td><code>pylablib</code></td><td>Thorlabs Kinesis motor control</td></tr>
+    <tr><td><code>vmbpy</code></td><td>Allied Vision camera (Vimba X SDK)</td></tr>
+    <tr><td><code>numpy</code></td><td>Array maths and .npy I/O</td></tr>
+    <tr><td><code>scipy</code></td><td>Uniform filter for depth computation</td></tr>
+    <tr><td><code>matplotlib</code></td><td>Depth/amplitude colourmap output</td></tr>
+    <tr><td><code>Pillow</code></td><td>Image saving (PNG / TIFF)</td></tr>
+  </table>
+
+  <div class="callout callout-info">
+    <span class="callout-icon">ℹ️</span>
+    <div><code>vmbpy</code> is installed in the system Python at <code>C:\Users\sreekar\AppData\Local\Programs\Python\Python312\</code>. Add that site-packages to your path if imports fail, or install vmbpy directly into the iccp env.</div>
+  </div>
+
+  <!-- ════════════ HARDWARE ════════════ -->
+  <h2 id="hardware">Hardware</h2>
+  <table>
+    <tr><th>Device</th><th>Model</th><th>Serial</th><th>Interface</th></tr>
+    <tr><td>Motor controller</td><td>Thorlabs KDC101</td><td>27259173</td><td>USB (APT driver)</td></tr>
+    <tr><td>Linear stage</td><td>Thorlabs Z825</td><td>auto-detected</td><td>via KDC101</td></tr>
+    <tr><td>Camera</td><td>Allied Vision (monochrome)</td><td>DEV_1AB22C0C168B</td><td>USB3 Vision</td></tr>
+  </table>
+
+  <div class="callout callout-warning">
+    <span class="callout-icon">⚠️</span>
+    <div>The KDC101 uses the Thorlabs APT USB driver — it does <strong>not</strong> appear as a COM port. pylablib communicates directly via USB using the device serial number. No FTDI VCP driver needed.</div>
+  </div>
+
+  <!-- ════════════ STAGE ════════════ -->
+  <h2 id="stage">ThorlabsStage <span class="badge badge-blue">stage.py</span></h2>
+  <p>Wraps <code>pylablib.devices.Thorlabs.KinesisMotor</code>. Auto-detects the first connected Brushed Motor Controller and reads the stage type from device EEPROM (<code>scale="stage"</code>) — so the correct encoder scale is applied automatically regardless of which compatible stage is attached.</p>
+
+  <h3>Basic usage</h3>
+<pre><code><span class="kw">from</span> stage <span class="kw">import</span> <span class="cl">ThorlabsStage</span>
+
+<span class="kw">with</span> <span class="cl">ThorlabsStage</span>(units=<span class="str">"mm"</span>) <span class="kw">as</span> stage:
+    stage.<span class="fn">home</span>()
+    stage.<span class="fn">move_to</span>(<span class="num">10</span>)           <span class="cm"># absolute, 10 mm</span>
+    stage.<span class="fn">move_by</span>(<span class="num">0.5</span>)          <span class="cm"># relative, +0.5 mm</span>
+    <span class="fn">print</span>(stage.position)       <span class="cm"># current position in mm</span></code></pre>
+
+  <h3>Unit selection</h3>
+  <p>Pass <code>units="m"</code> or <code>units="mm"</code> at construction. All inputs and outputs (<code>move_to</code>, <code>move_by</code>, <code>position</code>) use the chosen unit. Internally pylablib always works in metres; the class multiplies/divides transparently.</p>
+
+  <!-- ════════════ CAMERA ════════════ -->
+  <h2 id="camera">AVTCamera <span class="badge badge-purple">capture_camera.py</span></h2>
+  <p>Wraps <code>vmbpy</code>. On connect it scans all cameras, filters for <em>Allied Vision</em> by vendor name, opens the first match, and creates <code>save_dir</code> if it doesn't exist.</p>
+
+  <h3>Single frame</h3>
+<pre><code><span class="kw">from</span> capture_camera <span class="kw">import</span> <span class="cl">AVTCamera</span>
+
+<span class="kw">with</span> <span class="cl">AVTCamera</span>(exposure_us=<span class="num">10000</span>, gain_db=<span class="num">0.0</span>, save_dir=<span class="str">"captures"</span>) <span class="kw">as</span> cam:
+    image = cam.<span class="fn">capture</span>()          <span class="cm"># raw uint8 or uint16, shape (H, W)</span>
+    image8 = cam.<span class="fn">capture_8bit</span>()    <span class="cm"># rescaled uint8</span>
+    cam.<span class="fn">save</span>(image, cam.<span class="fn">timestamped_filename</span>())</code></pre>
+
+  <h3>Buffered stack acquisition</h3>
+  <p>Use this pattern when stepping the stage between frames. Each call to <code>capture_to_buffer()</code> appends to an internal list. <code>save_stack()</code> stacks them to <code>(H, W, N)</code>, saves as <code>.npy</code>, and clears the buffer.</p>
+<pre><code><span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="num">200</span>):
+    stage.<span class="fn">move_to</span>(i * <span class="num">0.005</span> + <span class="num">18</span>)    <span class="cm"># 5 µm steps from 18 mm</span>
+    cam.<span class="fn">capture_to_buffer</span>()
+
+cam.<span class="fn">save_stack</span>(
+    cam.<span class="fn">timestamped_filename</span>(prefix=<span class="str">"stack"</span>, ext=<span class="str">"npy"</span>),
+    save_previews=<span class="kw">True</span>,             <span class="cm"># also writes 8-bit PNGs to captures/captured_images/</span>
+)</code></pre>
+
+  <h3>Saving behaviour</h3>
+  <table>
+    <tr><th>Input dtype</th><th>Extension</th><th>Output</th></tr>
+    <tr><td>any</td><td><code>.npy</code></td><td>Raw numpy array saved as-is</td></tr>
+    <tr><td>uint16</td><td><code>.png</code> / <code>.tiff</code></td><td>16-bit TIFF (full precision) + rescaled 8-bit PNG</td></tr>
+    <tr><td>uint8</td><td><code>.png</code></td><td>Standard 8-bit PNG</td></tr>
+  </table>
+
+  <div class="callout callout-tip">
+    <span class="callout-icon">💡</span>
+    <div>Call <code>cam.clear_buffer()</code> to discard frames without saving — useful if a run is aborted midway.</div>
+  </div>
+
+  <!-- ════════════ DEPTH ════════════ -->
+  <h2 id="depth">Depth-from-Focus <span class="badge badge-green">depth_from_focus.py</span></h2>
+  <p>Translated from MATLAB (<code>computeMeanDiff.m</code> + <code>getintAmplitude.m</code>). Measures local intensity modulation per frame — the frame with highest modulation at each pixel is the in-focus frame, giving the depth map.</p>
+
+  <h3>Algorithm</h3>
+  <ol>
+    <li><strong>DC estimate</strong> — either global mean across all frames, or a 1-D temporal box filter of width <code>temporal_window</code> (running average). Boundary frames are replicated rather than zero-padded to match the original MATLAB behaviour.</li>
+    <li><strong>AC component</strong> — <code>|frame − DC|</code> per pixel per frame.</li>
+    <li><strong>Spatial smoothing</strong> — 2-D box filter of size <code>patch_size × patch_size</code> applied independently to each frame slice.</li>
+    <li><strong>Depth</strong> — <code>argmax</code> along the frame axis → index of best-focus frame per pixel.</li>
+  </ol>
+
+<pre><code><span class="kw">from</span> depth_from_focus <span class="kw">import</span> <span class="fn">compute_mean_diff</span>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+frames = np.<span class="fn">load</span>(<span class="str">"captures/stack.npy"</span>)       <span class="cm"># (H, W, N)</span>
+
+_, md_image, _ = <span class="fn">compute_mean_diff</span>(
+    frames[:, :, ::<span class="num">2</span>],          <span class="cm"># every other frame</span>
+    patch_size=<span class="num">5</span>,
+    avg_type=<span class="str">"local"</span>,
+    temporal_window=<span class="num">20</span>,
+)
+
+depth  = np.<span class="fn">argmax</span>(md_image, axis=<span class="num">2</span>)   <span class="cm"># (H, W) — best-focus frame index</span>
+maxamp = np.<span class="fn">max</span>(md_image,   axis=<span class="num">2</span>)   <span class="cm"># (H, W) — modulation amplitude</span></code></pre>
+
+  <div class="callout callout-info">
+    <span class="callout-icon">ℹ️</span>
+    <div><code>depth</code> is <strong>0-indexed</strong> in Python (MATLAB returns 1-indexed). For visualisation this makes no difference; if you need physical depth in mm multiply by your step size: <code>depth_mm = depth * 0.005</code>.</div>
+  </div>
+
+  <!-- ════════════ ACQUISITION SCRIPT ════════════ -->
+  <h2 id="acquisition">Acquisition Script <span class="badge badge-yellow">move_stage.py</span></h2>
+  <p>Connects both devices, homes the stage, sweeps in 5 µm steps, and saves a timestamped <code>.npy</code> stack with 8-bit preview PNGs.</p>
+
+<pre><code><span class="kw">from</span> stage <span class="kw">import</span> <span class="cl">ThorlabsStage</span>
+<span class="kw">from</span> capture_camera <span class="kw">import</span> <span class="cl">AVTCamera</span>
+
+stage = <span class="cl">ThorlabsStage</span>(units=<span class="str">"mm"</span>)
+stage.<span class="fn">connect</span>()
+
+cam = <span class="cl">AVTCamera</span>(exposure_us=<span class="num">10000</span>, gain_db=<span class="num">0.0</span>, save_dir=<span class="str">"coin_captures"</span>)
+cam.<span class="fn">connect</span>()
+
+stage.<span class="fn">home</span>()
+
+<span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="num">200</span>):
+    stage.<span class="fn">move_to</span>(i * <span class="num">0.005</span> + <span class="num">18</span>)
+    cam.<span class="fn">capture_to_buffer</span>()
+    <span class="fn">print</span>(<span class="str">f"  {stage.position:.3f} mm"</span>)
+
+cam.<span class="fn">save_stack</span>(cam.<span class="fn">timestamped_filename</span>(prefix=<span class="str">"stack"</span>, ext=<span class="str">"npy"</span>), save_previews=<span class="kw">True</span>)
+
+stage.<span class="fn">release</span>()
+cam.<span class="fn">release</span>()</code></pre>
+
+  <p>Outputs written to <code>coin_captures/</code>:</p>
+  <ul>
+    <li><code>stack_YYYYMMDD_HHMMSS.npy</code> — raw frame stack, shape <code>(H, W, 200)</code></li>
+    <li><code>captured_images/stack_*_frame0000.png</code> … — rescaled 8-bit previews</li>
+  </ul>
+
+  <!-- ════════════ PROCESSING SCRIPT ════════════ -->
+  <h2 id="processing">Processing Script <span class="badge badge-green">run_depth.py</span></h2>
+  <p>Loads a saved stack and runs the depth-from-focus pipeline.</p>
+
+<pre><code><span class="kw">from</span> depth_from_focus <span class="kw">import</span> <span class="fn">compute_mean_diff</span>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+<span class="kw">from</span> pathlib <span class="kw">import</span> <span class="cl">Path</span>
+
+stack_path = <span class="cl">Path</span>(<span class="str">"coin_captures/stack.npy"</span>)
+frames = np.<span class="fn">load</span>(stack_path)
+
+_, md_image, _ = <span class="fn">compute_mean_diff</span>(
+    frames[:, :, ::<span class="num">2</span>], patch_size=<span class="num">5</span>, avg_type=<span class="str">"local"</span>, temporal_window=<span class="num">20</span>
+)
+
+depth  = np.<span class="fn">argmax</span>(md_image, axis=<span class="num">2</span>)
+maxamp = np.<span class="fn">max</span>(md_image,   axis=<span class="num">2</span>)
+
+np.<span class="fn">save</span>(stack_path.<span class="fn">with_name</span>(stack_path.stem + <span class="str">"_depth.npy"</span>),  depth)
+np.<span class="fn">save</span>(stack_path.<span class="fn">with_name</span>(stack_path.stem + <span class="str">"_maxamp.npy"</span>), maxamp)</code></pre>
+
+  <p>Outputs (saved alongside the input stack):</p>
+  <ul>
+    <li><code>stack_depth.npy</code> / <code>stack_depth.png</code> — depth map (viridis colourmap)</li>
+    <li><code>stack_maxamp.npy</code> / <code>stack_maxamp.png</code> — max amplitude (inferno colourmap)</li>
+  </ul>
+
+  <hr />
+
+  <!-- ════════════ DOCKER ════════════ -->
+  <h2 id="docker">Docker — useful?</h2>
+  <p><strong>Short answer: no for acquisition, possibly yes for processing.</strong></p>
+
+  <p>This system controls physical USB hardware using proprietary Windows drivers (Thorlabs APT and Allied Vision Vimba X). Docker on Windows cannot realistically support this:</p>
+
+  <table>
+    <tr><th>Blocker</th><th>Why it matters</th></tr>
+    <tr><td>Thorlabs APT USB driver</td><td>Windows kernel driver — cannot run inside a Linux container. Even with USB passthrough via <code>usbipd-win</code>, the APT protocol driver won't be present in the container.</td></tr>
+    <tr><td>Vimba X SDK</td><td>Ships as a Windows installer; the <code>vmbpy</code> wheel and underlying transport layer DLLs are Windows-only.</td></tr>
+    <tr><td>USB passthrough complexity</td><td>Docker Desktop on Windows routes USB through WSL2 via <code>usbipd-win</code> — brittle, requires manual attachment each session, breaks on reconnect.</td></tr>
+  </table>
+
+  <div class="callout callout-warning">
+    <span class="callout-icon">⚠️</span>
+    <div>Do not containerise the acquisition side (<code>move_stage.py</code>). The conda environment + <code>setup.sh</code> already solves reproducibility for the hardware layer on Windows.</div>
+  </div>
+
+  <h3>Where Docker <em>does</em> make sense</h3>
+  <p>The processing pipeline (<code>depth_from_focus.py</code>, <code>run_depth.py</code>) is pure Python + numpy/scipy/matplotlib with no hardware dependency. A Docker image here buys you:</p>
+  <ul>
+    <li>Running depth reconstruction on a Linux server or HPC cluster from a saved <code>.npy</code> stack</li>
+    <li>Sharing results with collaborators who don't have the hardware</li>
+    <li>Pinning exact library versions for reproducible paper results</li>
+  </ul>
+
+  <p>A minimal processing-only <code>Dockerfile</code> would look like:</p>
+<pre><code><span class="kw">FROM</span> python:3.12-slim
+<span class="kw">WORKDIR</span> /app
+<span class="kw">COPY</span> requirements_processing.txt .
+<span class="kw">RUN</span> pip install --no-cache-dir -r requirements_processing.txt
+<span class="kw">COPY</span> depth_from_focus.py run_depth.py ./
+<span class="cm"># mount your data at runtime:</span>
+<span class="cm"># docker run -v /path/to/captures:/app/captures my-iccp-image python run_depth.py</span></code></pre>
+
+  <p>Where <code>requirements_processing.txt</code> contains only <code>numpy</code>, <code>scipy</code>, and <code>matplotlib</code> — no hardware SDKs needed.</p>
+
+  <hr />
+
+  <!-- ════════════ API REFERENCE ════════════ -->
+  <h2 id="api-stage">API Reference — ThorlabsStage</h2>
+  <table>
+    <tr><th>Method / Property</th><th>Description</th></tr>
+    <tr><td><code>ThorlabsStage(units="mm")</code></td><td>Constructor. <code>units</code>: <code>"mm"</code> or <code>"m"</code>.</td></tr>
+    <tr><td><code>.connect()</code></td><td>Find and open the first Brushed Motor Controller. Returns self.</td></tr>
+    <tr><td><code>.release()</code></td><td>Close the device connection.</td></tr>
+    <tr><td><code>.home(wait=True)</code></td><td>Home the stage; blocks until complete if <code>wait=True</code>.</td></tr>
+    <tr><td><code>.move_to(pos, wait=True)</code></td><td>Absolute move in user units.</td></tr>
+    <tr><td><code>.move_by(dist, wait=True)</code></td><td>Relative move in user units.</td></tr>
+    <tr><td><code>.stop()</code></td><td>Immediately stop motion.</td></tr>
+    <tr><td><code>.position</code></td><td>Read current position in user units (property).</td></tr>
+    <tr><td><code>.is_moving</code></td><td><code>True</code> while motion is in progress (property).</td></tr>
+    <tr><td><code>.wait_move()</code></td><td>Block until current move completes.</td></tr>
+  </table>
+
+  <h2 id="api-camera">API Reference — AVTCamera</h2>
+  <table>
+    <tr><th>Method</th><th>Description</th></tr>
+    <tr><td><code>AVTCamera(exposure_us, gain_db, save_dir)</code></td><td>Constructor. Creates <code>save_dir</code> on connect.</td></tr>
+    <tr><td><code>.connect()</code></td><td>Open first Allied Vision camera. Returns self.</td></tr>
+    <tr><td><code>.release()</code></td><td>Close camera and Vimba SDK.</td></tr>
+    <tr><td><code>.set_exposure(us)</code></td><td>Update exposure time live.</td></tr>
+    <tr><td><code>.set_gain(db)</code></td><td>Update gain live.</td></tr>
+    <tr><td><code>.capture()</code></td><td>Single raw frame as numpy array.</td></tr>
+    <tr><td><code>.capture_8bit()</code></td><td>Single frame rescaled to uint8.</td></tr>
+    <tr><td><code>.capture_to_buffer()</code></td><td>Capture and append to internal buffer. Returns frame.</td></tr>
+    <tr><td><code>.save_stack(filename, save_previews=False)</code></td><td>Flush buffer → <code>(H, W, N)</code> <code>.npy</code>. Optionally write per-frame 8-bit PNGs to <code>save_dir/captured_images/</code>.</td></tr>
+    <tr><td><code>.clear_buffer()</code></td><td>Discard buffered frames without saving.</td></tr>
+    <tr><td><code>.save(image, filename)</code></td><td>Save to <code>save_dir</code>. Auto-routes by extension and dtype.</td></tr>
+    <tr><td><code>.timestamped_filename(prefix, ext)</code></td><td>Generate <code>prefix_YYYYMMDD_HHMMSS.ext</code>.</td></tr>
+  </table>
+
+  <h2 id="api-depth">API Reference — depth_from_focus</h2>
+  <table>
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><code>compute_mean_diff(frames, patch_size, avg_type, temporal_window)</code></td><td>Main entry point. Returns <code>(md_vector, md_image, blurred)</code>. <code>md_image</code> is <code>(H, W, N)</code> — take <code>argmax</code> over axis 2 for depth.</td></tr>
+    <tr><td><code>get_int_amplitude(frames, avg_intensity, patch_size)</code></td><td>Lower-level function. Computes AC component and applies spatial patch filter.</td></tr>
+  </table>
+
+  <div class="callout callout-tip">
+    <span class="callout-icon">💡</span>
+    <div>To convert the depth index to physical depth in mm: <code>depth_mm = depth * step_size_mm</code>, where <code>step_size_mm = 0.005</code> for the 5 µm steps used in the acquisition script.</div>
+  </div>
+
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,20 @@
+name: iccp
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - ipykernel        # VSCode interactive window / Jupyter
+  - pip:
+      - numpy==2.4.6
+      - scipy==1.18.0
+      - matplotlib==3.11.0
+      - Pillow==12.2.0
+      - pyserial==3.5
+      - pylablib==1.4.5
+      # vmbpy is NOT on PyPI — installed from local Vimba X SDK wheel by setup.sh
+      # Platform support:
+      #   Windows : fully supported
+      #   Ubuntu  : pylablib USB APT confirmed working; vmbpy needs Linux Vimba X SDK
+      #   macOS   : stage via /dev/cu.usbserial-* (Apple FTDI driver, no kext changes)
+      #             camera via Vimba X macOS .pkg → /Applications/VimbaX_*/api/python/vmbpy-*.whl

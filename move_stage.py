@@ -6,7 +6,7 @@ from camera import Camera
 stage = ThorlabsStage(units="mm")
 stage.connect()
 
-cam = Camera(exposure_us=15000, gain_db=0.0, save_dir="coin_captures_ids_test")
+cam = Camera(exposure_us=15000, gain_db=0.0, save_dir="coin_captures_ids_testavt")
 cam.connect()
 
 #%%
@@ -18,7 +18,7 @@ for i in range(5):
     cam.capture_to_buffer()
     print(f"  {stage.position:.3f} mm")
 
-cam.save_stack(cam.timestamped_filename(prefix="stack", ext="npy"), save_previews=False)
+cam.save_stack(cam.timestamped_filename(prefix="stack", ext="npy"), save_previews=True)
 
 #%%
 stage.release()

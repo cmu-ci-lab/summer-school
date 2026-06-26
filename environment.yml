@@ -1,4 +1,4 @@
-name: iccp
+name: iccp-oct
 channels:
   - defaults
 dependencies:

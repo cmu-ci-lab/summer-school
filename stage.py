@@ -24,11 +24,22 @@ class ThorlabsStage:
     _UNIT_SCALE = {"m": 1.0, "mm": 1e3}   # pylablib uses metres; multiply to get user unit
     _THORLABS_VID = 0x0403  # FTDI VID shared by all KDC101 / APT USB devices
 
-    def __init__(self, units: str = "mm"):
+    def __init__(self, units: str = "mm", stage: str = "stage"):
+        """
+        units : "m" or "mm" — units for all position/velocity arguments and returns.
+        stage : how pylablib determines the motor's step scale.
+                "stage"  -> auto-detect from the stage ID programmed into the
+                            controller (set via Thorlabs Kinesis). This is a query
+                            over the open connection, so it works regardless of how
+                            we connected (serial port or APT serial number).
+                Otherwise pass an explicit stage name when auto-detect fails, e.g.
+                "Z825", "Z812", "Z806", "MTS25-Z8", "MTS50-Z8", "PRM1-Z8", "CR1-Z7".
+        """
         if units not in self._UNIT_SCALE:
             raise ValueError(f"units must be 'm' or 'mm', got {units!r}")
         self.units = units
         self._scale = self._UNIT_SCALE[units]
+        self._scale_spec = stage   # passed to KinesisMotor(scale=...)
         self._stage = None
 
     # ------------------------------------------------------------------
@@ -36,46 +47,29 @@ class ThorlabsStage:
     # ------------------------------------------------------------------
 
     def connect(self):
-        if sys.platform == "darwin":
-            self._connect_macos()
+        if sys.platform == "win32":
+            self._connect_apt()       # Windows: APT enumeration by serial number
         else:
-            self._connect_usb()
+            self._connect_serial()    # Linux / macOS: open the FTDI serial port directly
         return self
 
-    def _connect_usb(self):
-        """Windows / Linux: USB APT direct via libusb."""
-        devices = Thorlabs.list_kinesis_devices()
-        brushed = [(sn, desc) for sn, desc in devices if "Brushed Motor" in desc]
+    def _connect_serial(self):
+        """Linux / macOS: connect through the FTDI serial port (e.g. /dev/ttyUSB0).
 
-        if not devices:
-            raise RuntimeError("No Thorlabs Kinesis devices found. Check USB and APT driver.")
-        if not brushed:
-            found = ", ".join(f"{sn} ({d})" for sn, d in devices)
-            raise RuntimeError(f"No Brushed Motor Controller found. Connected: {found}")
-        if len(brushed) > 1:
-            print(f"Warning: {len(brushed)} brushed controllers found, using first.")
-
-        sn, desc = brushed[0]
-        self._stage = Thorlabs.KinesisMotor(sn, scale="stage")
-
-        info = self._stage.get_device_info()
-        print(f"Connected: {desc}  model={info.model_no}  serial={info.serial_no}")
-        print(f"Stage: {self._stage.get_stage()}  |  internal units: {self._stage.get_scale_units()}  |  user units: {self.units}")
-
-    def _connect_macos(self):
-        """macOS: Apple's FTDI driver exposes /dev/cu.usbserial-* — use that directly.
-
-        list_kinesis_devices() requires libusb and won't work while Apple's driver
-        holds the device, so we scan serial ports by VID instead.
+        The KDC101 enumerates as an FTDI USB-serial device (VID 0x0403). We find
+        it by VID and open the port directly rather than using APT serial-number
+        enumeration: that needs the ft232/libftdi backend, which isn't always
+        present (Linux without libftdi; macOS where Apple's FTDI driver holds the
+        device). The motor's step scale is still auto-detected by querying the
+        controller over this connection.
         """
         import serial.tools.list_ports
-        ports = serial.tools.list_ports.comports()
-        ftdi_ports = [p for p in ports if p.vid == self._THORLABS_VID]
+        ftdi_ports = [p for p in serial.tools.list_ports.comports()
+                      if p.vid == self._THORLABS_VID]
 
         if not ftdi_ports:
             raise RuntimeError(
-                "No FTDI serial port found. Make sure the KDC101 is plugged in.\n"
-                "Expected: /dev/cu.usbserial-* with VID 0x0403.\n"
+                "No Thorlabs FTDI serial port found (VID 0x0403). Check the USB cable.\n"
                 "Diagnose: python -c \""
                 "import serial.tools.list_ports; "
                 "[print(p.device, hex(p.vid or 0), p.description) "
@@ -85,12 +79,41 @@ class ThorlabsStage:
             print(f"Warning: {len(ftdi_ports)} FTDI ports found, using first: {ftdi_ports[0].device}")
 
         port = ftdi_ports[0].device
-        print(f"macOS: connecting via serial port {port}")
-        self._stage = Thorlabs.KinesisMotor(port, scale="stage")
+        print(f"Connecting via serial port {port}")
+        self._open(port)
+
+    def _connect_apt(self):
+        """Windows: USB APT direct enumeration by serial number."""
+        devices = Thorlabs.list_kinesis_devices()
+        if not devices:
+            raise RuntimeError("No Thorlabs Kinesis devices found. Check USB and APT driver.")
+
+        brushed = [(sn, desc) for sn, desc in devices if "Brushed Motor" in desc]
+        if not brushed:
+            found = ", ".join(f"{sn} ({d})" for sn, d in devices)
+            raise RuntimeError(f"No Brushed Motor Controller found. Connected: {found}")
+        if len(brushed) > 1:
+            print(f"Warning: {len(brushed)} brushed controllers found, using first.")
+
+        sn, desc = brushed[0]
+        print(f"Connecting to {desc} (serial {sn})")
+        self._open(sn)
+
+    def _open(self, conn):
+        """Open the KinesisMotor on a connection (serial port or APT serial number)."""
+        self._stage = Thorlabs.KinesisMotor(conn, scale=self._scale_spec)
 
         info = self._stage.get_device_info()
+        detected = self._stage.get_stage()
         print(f"Connected: model={info.model_no}  serial={info.serial_no}")
-        print(f"Stage: {self._stage.get_stage()}  |  internal units: {self._stage.get_scale_units()}  |  user units: {self.units}")
+        print(f"Stage: {detected}  |  internal units: {self._stage.get_scale_units()}  |  user units: {self.units}")
+
+        if detected is None and self._scale_spec == "stage":
+            print("WARNING: stage type not auto-detected — positions are in RAW STEPS, not mm.")
+            print("         The controller has no stage programmed. Either set it once in")
+            print("         Thorlabs Kinesis, or pass it explicitly, e.g.:")
+            print("           ThorlabsStage(units='mm', stage='Z825')")
+            print("         Common KDC101 stages: Z806 Z812 Z825 MTS25-Z8 MTS50-Z8 PRM1-Z8 CR1-Z7")
 
     def release(self):
         if self._stage is not None:

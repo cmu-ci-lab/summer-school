@@ -7,7 +7,9 @@ Runs basic connectivity and functionality tests:
   • Camera connection and capture
 
 Usage:
-    python test_hardware.py
+    python test_hardware.py                 # auto-detect camera (AVT or IDS)
+    python test_hardware.py --camera ids    # IDS only — skip the Vimba X / vmbpy check
+    python test_hardware.py --camera avt    # Allied Vision only
 
 Exit codes:
   0 = all tests passed
@@ -18,7 +20,62 @@ Exit codes:
 
 import sys
 import time
+import argparse
+import glob
 from pathlib import Path
+
+VIMBA_URL = "https://www.alliedvision.com/en/support/software-downloads/vimba-x-sdk/vimba-x"
+
+
+def find_vmbpy_wheel():
+    """Search the standard Vimba X install locations for the vmbpy wheel."""
+    if sys.platform == "darwin":
+        patterns = [
+            "/Users/Shared/Allied Vision/**/vmbpy-*.whl",
+            "/Applications/VimbaX_*/**/vmbpy-*.whl",
+        ]
+    elif sys.platform.startswith("linux"):
+        patterns = ["/opt/**/vmbpy-*.whl"]
+    elif sys.platform.startswith("win"):
+        patterns = ["C:/Program Files/Allied Vision/**/vmbpy-*.whl"]
+    else:
+        patterns = []
+    for pat in patterns:
+        hits = glob.glob(pat, recursive=True)
+        if hits:
+            return hits[0]
+    return None
+
+
+def check_vmbpy():
+    """Return True if vmbpy imports. Otherwise print install guidance and return False.
+
+    Only relevant for Allied Vision cameras — IDS users can skip with --camera ids.
+    """
+    try:
+        import vmbpy  # noqa: F401
+        return True
+    except ImportError:
+        print("⚠ vmbpy (Allied Vision Vimba X SDK) is not installed.")
+        wheel = find_vmbpy_wheel()
+        if wheel:
+            print("  Found the SDK wheel — install it with:")
+            print(f'    pip install "{wheel}"')
+        else:
+            print(f"  Vimba X not found. Download it from:\n    {VIMBA_URL}")
+            if sys.platform == "darwin":
+                print("  macOS installer: VimbaX_Setup-2023-4-macOS.dmg")
+                print("  After install, the wheel is at:")
+                print("    /Users/Shared/Allied Vision/Vimba X/Vmbpy/vmbpy-*.whl")
+            elif sys.platform.startswith("linux"):
+                print("  Linux installer: VimbaX_Setup-2026-1-Linux64.tar.gz (or _ARM64)")
+                print("  Wheel: /opt/VimbaX_<version>/api/python/vmbpy-*.whl")
+            elif sys.platform.startswith("win"):
+                print("  Windows installer: VimbaX_Setup-2026-1-Win64.exe")
+                print("  Wheel: C:\\Program Files\\Allied Vision\\Vimba X\\api\\python\\vmbpy-*.whl")
+            print("  Then: pip install <path-to-vmbpy-*.whl>")
+        print("  (If you are using an IDS camera, re-run with: --camera ids)")
+        return False
 
 
 def test_stage():
@@ -71,11 +128,23 @@ def test_stage():
         return False
 
 
-def test_camera():
-    """Test camera connection and capture."""
+def test_camera(vendor="auto"):
+    """Test camera connection and capture.
+
+    vendor: "auto" (AVT then IDS), "avt" (Allied Vision), or "ids".
+    For "avt"/"auto" the Vimba X / vmbpy install is checked first; "ids" skips it.
+    """
+    label = {"auto": "Allied Vision or IDS", "avt": "Allied Vision", "ids": "IDS"}[vendor]
     print("\n" + "="*60)
-    print("  TEST: Camera (Allied Vision or IDS)")
+    print(f"  TEST: Camera ({label})")
     print("="*60)
+
+    # vmbpy is only needed for Allied Vision cameras. Skip the check for IDS.
+    if vendor in ("auto", "avt"):
+        has_vmbpy = check_vmbpy()
+        if vendor == "avt" and not has_vmbpy:
+            print("\n✗✗✗ Camera test FAILED — vmbpy not installed (see above).")
+            return False
 
     try:
         from camera import Camera
@@ -88,7 +157,8 @@ def test_camera():
         test_dir.mkdir(exist_ok=True)
         print(f"✓ Created test directory: {test_dir}")
 
-        cam = Camera(exposure_us=10000, gain_db=0.0, save_dir=str(test_dir))
+        prefer = None if vendor == "auto" else vendor
+        cam = Camera(exposure_us=10000, gain_db=0.0, save_dir=str(test_dir), prefer=prefer)
         print("✓ Created Camera instance")
 
         cam.connect()
@@ -134,14 +204,21 @@ def test_camera():
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Validate stage and camera setup.")
+    parser.add_argument("--camera", choices=["auto", "avt", "ids"], default="auto",
+                        help="which camera vendor to test (default auto; "
+                             "'ids' skips the Vimba X / vmbpy check)")
+    args = parser.parse_args()
+
     print("\n" + "="*60)
     print("  HARDWARE VALIDATION")
     print("="*60)
     print(f"  Python: {sys.version}")
     print(f"  Platform: {sys.platform}")
+    print(f"  Camera vendor: {args.camera}")
 
     stage_ok = test_stage()
-    camera_ok = test_camera()
+    camera_ok = test_camera(vendor=args.camera)
 
     # Summary
     print("\n" + "="*60)

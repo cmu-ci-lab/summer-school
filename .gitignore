@@ -1,0 +1,15 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Captured data — large binaries, do not commit
+*.npy
+*.mp4
+coin_captures_*/
+test_captures/
+
+# OS / editor cruft
+.DS_Store

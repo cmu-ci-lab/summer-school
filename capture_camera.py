@@ -376,6 +376,26 @@ class AVTCamera:
             print("Binning not supported on this camera.")
         return None
 
+    def set_pixel_format_mono8(self):
+        """Force 8-bit mono output — lighter frames and a simpler preview.
+
+        Returns True if Mono8 was applied. Call after connect() (and before
+        start_streaming()). This is not reset here, but reconnecting restores
+        the highest native bit depth via _apply_settings(), so other scripts
+        that capture full-precision data are unaffected.
+        """
+        if self._cam is None:
+            raise RuntimeError("Camera not connected. Call connect() first.")
+        feat = getattr(self._cam, "PixelFormat", None)
+        if feat is not None:
+            try:
+                feat.set(vmbpy.PixelFormat.Mono8)
+                print("Pixel format: Mono8")
+                return True
+            except Exception as e:
+                print(f"Could not set Mono8: {e}")
+        return False
+
     # ------------------------------------------------------------------
     # Continuous streaming (for live view)
     # ------------------------------------------------------------------

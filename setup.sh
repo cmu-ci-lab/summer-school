@@ -5,6 +5,7 @@ set -e
 
 ENV_NAME="iccp"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="$PROJECT_DIR/.venv"
 
 # ── Detect OS ─────────────────────────────────────────────────────────────────
 case "$(uname -s)" in
@@ -128,10 +129,25 @@ if [ "$OS" = "linux" ]; then
   fi
 fi
 
+# ── 4b. macOS: stage backend (pyftdi + libusb) ───────────────────────────
+# The KDC101 uses Thorlabs' custom FTDI PID (0xfaf0).  On macOS:
+#   * Apple's FTDI driver ignores that PID, so NO /dev/cu.usbserial-* appears.
+#   * pylablib's ft232 backend (pyft232 + libftdi 0.x ABI) segfaults vs libftdi 1.5.
+# So we drive the FTDI chip with pyftdi (pure-Python, libusb based, supports
+# custom PIDs).  pyftdi needs a matching-architecture libusb; on Apple Silicon
+# the only reliable arm64 build comes from conda-forge.  See kinesis_stage.py.
+if [ "$OS" = "mac" ]; then
+  echo ""
+  echo "Installing macOS stage backend (libusb via conda-forge + pyftdi)..."
+  "$CONDA_EXE" install -n "$ENV_NAME" -c conda-forge libusb -y
+  "$PIP" install pyftdi
+  echo "macOS stage backend ready (pyftdi over libusb)."
+fi
+
 # ── 5. Register Jupyter kernel ────────────────────────────────────────────────
 echo ""
 echo "Registering Jupyter kernel..."
-"$PYTHON" -m ipykernel install --user --name iccp --display-name "Python (iccp)"
+"$PYTHON" -m ipykernel install --user --name "$ENV_NAME" --display-name "Python ($ENV_NAME)"
 echo "Kernel registered."
 
 # ── 6. Summary ────────────────────────────────────────────────────────────────
@@ -151,8 +167,10 @@ if [ "$OS" = "linux" ]; then
   echo "    USB    : udev rule installed — reconnect devices"
 elif [ "$OS" = "mac" ]; then
   echo "  Platform notes (macOS):"
-  echo "    Stage  : KDC101 connects via Apple's built-in FTDI driver"
-  echo "             (exposes /dev/cu.usbserial-*) — no kext changes needed"
+  echo "    Stage  : KDC101 driven via pyftdi over libusb (kinesis_stage.py)."
+  echo "             Apple's FTDI driver ignores Thorlabs' custom PID 0xfaf0,"
+  echo "             so there is NO /dev/cu.usbserial-* port — pyftdi/libusb"
+  echo "             claim the device directly. move_stage.py auto-selects this."
   echo "    Camera : install Vimba X .pkg for macOS (Intel or Apple Silicon)"
   echo "             wheel path: /Applications/VimbaX_<version>/api/python/vmbpy-*.whl"
 elif [ "$OS" = "windows" ]; then

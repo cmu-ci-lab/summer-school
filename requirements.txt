@@ -4,6 +4,7 @@ matplotlib==3.11.0
 Pillow==12.2.0
 pyserial==3.5
 pylablib==1.4.5
+pyftdi
 plotly==6.8.0
 ipykernel
 # vmbpy — install from Vimba X SDK wheel, NOT from PyPI (see setup.sh)

@@ -227,24 +227,62 @@ class AVTCamera:
 
     def _set_best_mono_pixel_format(self):
         """Set the highest monochrome pixel format the camera natively supports."""
-        preferred = [
+        preferred_enums = [
             vmbpy.PixelFormat.Mono16,
             vmbpy.PixelFormat.Mono12,
             vmbpy.PixelFormat.Mono10,
             vmbpy.PixelFormat.Mono8,
         ]
+        
+        # Try direct attribute access first
         feat = getattr(self._cam, "PixelFormat", None)
-        if feat is None:
-            print("Warning: PixelFormat feature not found — using camera default.")
+        if feat is not None:
+            print("Attempting to set PixelFormat to highest supported mono format...")
+            for pref_enum in preferred_enums:
+                try:
+                    feat.set(pref_enum)
+                    print(f"✓ Set PixelFormat to: {pref_enum}")
+                    return
+                except Exception as e:
+                    print(f"  ✗ Could not set to {pref_enum}: {e}")
+                    continue
+            print("⚠ Could not set PixelFormat to any mono format — camera will use default")
             return
-        for fmt in preferred:
-            try:
-                feat.set(fmt)
-                print(f"Pixel format: {fmt}")
-                return
-            except Exception:
-                pass
-        print("Warning: could not set a monochrome pixel format — using camera default.")
+        
+        # No direct PixelFormat attribute — scan all features
+        print("PixelFormat not accessible as attribute. Scanning all camera features...")
+        try:
+            all_feats = self._cam.get_all_features()
+            # Find features related to format/pixel/image
+            format_feats = [f for f in all_feats if any(x in f.get_name() for x in ["Format", "Pixel", "Image", "Bayer"])]
+            
+            if format_feats:
+                print(f"Found {len(format_feats)} format-related features:")
+                for f in format_feats:
+                    fname = f.get_name()
+                    try:
+                        val = f.get()
+                        ftype = type(f).__name__
+                        print(f"  • {fname} ({ftype}): {val}")
+                    except Exception as e:
+                        print(f"  • {fname}: <error reading: {e}>")
+                
+                # Try to set any feature named *Format* to a Mono value
+                for f in format_feats:
+                    if "Format" in f.get_name():
+                        for pref_enum in preferred_enums:
+                            try:
+                                f.set(pref_enum)
+                                print(f"✓ Set {f.get_name()} to {pref_enum}")
+                                return
+                            except Exception:
+                                continue
+            else:
+                print("No format-related features found on this camera.")
+        except Exception as e:
+            print(f"Error scanning features: {e}")
+        
+        print("⚠ Cannot configure pixel format — camera will use its default")
 
     def _apply_settings(self):
         self._set_best_mono_pixel_format()
@@ -300,6 +338,11 @@ class AVTCamera:
         mono_fmts  = (vmbpy.PixelFormat.Mono8,  vmbpy.PixelFormat.Mono10,
                       vmbpy.PixelFormat.Mono12, vmbpy.PixelFormat.Mono16)
         color_fmts = (vmbpy.PixelFormat.Rgb8,)
+
+        # Log format on first capture for diagnostic purposes
+        if not hasattr(self, '_format_logged'):
+            print(f"[Camera] Receiving frames in format: {fmt}")
+            self._format_logged = True
 
         if fmt not in mono_fmts and fmt not in color_fmts:
             target = vmbpy.PixelFormat.Rgb8 if "Bayer" in str(fmt) else vmbpy.PixelFormat.Mono8

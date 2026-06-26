@@ -1,10 +1,12 @@
-name: iccp
+name: iccp-oct
 channels:
+  - conda-forge
   - defaults
 dependencies:
   - python=3.12
   - pip
   - ipykernel        # VSCode interactive window / Jupyter
+  - opencv           # install OpenCV from conda-forge on macOS/Apple Silicon
   - pip:
       - numpy==2.4.6
       - scipy==1.18.0
@@ -13,6 +15,7 @@ dependencies:
       - pyserial==3.5
       - pylablib==1.4.5
       - pyftdi
+
       # vmbpy is NOT on PyPI — installed from local Vimba X SDK wheel by setup.sh
       # Platform support:
       #   Windows : fully supported

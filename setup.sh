@@ -3,7 +3,7 @@
 # Usage:  chmod +x setup.sh && ./setup.sh
 set -e
 
-ENV_NAME="iccp"
+ENV_NAME="iccp-oct"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$PROJECT_DIR/.venv"
 
@@ -155,9 +155,9 @@ echo ""
 echo "=================================================="
 echo "  Setup complete!"
 echo ""
-echo "  Activate :  conda activate iccp"
+echo "  Activate :  conda activate iccp-oct"
 echo "  VSCode   :  Ctrl+Shift+P → Python: Select Interpreter"
-echo "              → Python (iccp)"
+echo "              → Python (iccp-oct)"
 echo ""
 
 if [ "$OS" = "linux" ]; then

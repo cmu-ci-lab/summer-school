@@ -1,4 +1,5 @@
 import vmbpy
+import threading
 import numpy as np
 from PIL import Image
 from pathlib import Path
@@ -27,6 +28,10 @@ class AVTCamera:
         self._vmb = None
         self._cam = None
         self._buffer: list[np.ndarray] = []
+        self._streaming = False
+        self._latest_frame: np.ndarray | None = None
+        self._frame_count = 0
+        self._frame_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Connection
@@ -192,10 +197,9 @@ class AVTCamera:
 
         if applied:
             print(f"GigE stream settings applied: {', '.join(applied)}")
-        else:
-            print("GigE stream settings: none applied (camera may not expose these features)")
 
     def release(self):
+        self.stop_streaming()
         if self._cam is not None:
             self._cam.__exit__(None, None, None)
             self._cam = None
@@ -237,54 +241,40 @@ class AVTCamera:
         # Try direct attribute access first
         feat = getattr(self._cam, "PixelFormat", None)
         if feat is not None:
-            print("Attempting to set PixelFormat to highest supported mono format...")
             for pref_enum in preferred_enums:
                 try:
                     feat.set(pref_enum)
-                    print(f"✓ Set PixelFormat to: {pref_enum}")
+                    print(f"Pixel format: {pref_enum}")
                     return
-                except Exception as e:
-                    print(f"  ✗ Could not set to {pref_enum}: {e}")
+                except Exception:
                     continue
-            print("⚠ Could not set PixelFormat to any mono format — camera will use default")
             return
         
         # No direct PixelFormat attribute — scan all features
-        print("PixelFormat not accessible as attribute. Scanning all camera features...")
         try:
             all_feats = self._cam.get_all_features()
             # Find features related to format/pixel/image
             format_feats = [f for f in all_feats if any(x in f.get_name() for x in ["Format", "Pixel", "Image", "Bayer"])]
             
-            if format_feats:
-                print(f"Found {len(format_feats)} format-related features:")
-                for f in format_feats:
-                    fname = f.get_name()
-                    try:
-                        val = f.get()
-                        ftype = type(f).__name__
-                        print(f"  • {fname} ({ftype}): {val}")
-                    except Exception as e:
-                        print(f"  • {fname}: <error reading: {e}>")
-                
-                # Try to set any feature named *Format* to a Mono value
-                for f in format_feats:
-                    if "Format" in f.get_name():
-                        for pref_enum in preferred_enums:
-                            try:
-                                f.set(pref_enum)
-                                print(f"✓ Set {f.get_name()} to {pref_enum}")
-                                return
-                            except Exception:
-                                continue
-            else:
-                print("No format-related features found on this camera.")
-        except Exception as e:
-            print(f"Error scanning features: {e}")
-        
-        print("⚠ Cannot configure pixel format — camera will use its default")
+            # Try to set any feature named *Format* to a Mono value
+            for f in format_feats:
+                if "Format" in f.get_name():
+                    for pref_enum in preferred_enums:
+                        try:
+                            f.set(pref_enum)
+                            print(f"Pixel format: {pref_enum}")
+                            return
+                        except Exception:
+                            continue
+        except Exception:
+            pass
 
     def _apply_settings(self):
+        # Binning persists in the camera across disconnects, so always start
+        # from full resolution. Callers (e.g. live_view) opt into binning after
+        # connect(); every other script gets a clean full-res sensor.
+        self.set_binning(1, mode=None, verbose=False)
+
         self._set_best_mono_pixel_format()
 
         # Auto-off: try both SFNC 2.x and older SFNC 1.x names
@@ -321,6 +311,125 @@ class AVTCamera:
             except AttributeError:
                 pass
 
+    def set_binning(self, factor: int = 2, mode: str | None = "Sum", verbose: bool = True):
+        """Enable NxN on-sensor binning to cut resolution and speed up readout.
+
+        Binning reads fewer pixels off the sensor, so each frame transfers
+        ~factor**2 less data. Pass factor=1 to restore full resolution.
+        Returns a dict of the binning actually applied, or None if the camera
+        doesn't expose binning features.
+
+        Note: binning persists in the camera until changed (it survives
+        disconnect), so connect() resets it to 1 — see _apply_settings().
+        """
+        if self._cam is None:
+            raise RuntimeError("Camera not connected. Call connect() first.")
+
+        # Binning mode (Sum / Average) is optional and camera-dependent.
+        if mode is not None:
+            for sel in ("BinningHorizontalMode", "BinningVerticalMode"):
+                feat = getattr(self._cam, sel, None)
+                if feat is not None:
+                    try:
+                        feat.set(mode)
+                    except Exception:
+                        pass
+
+        applied = {}
+        for name in ("BinningHorizontal", "BinningVertical"):
+            feat = getattr(self._cam, name, None)
+            if feat is not None:
+                try:
+                    feat.set(factor)
+                    applied[name] = feat.get()
+                except Exception:
+                    pass
+
+        # Changing binning does NOT auto-restore the frame size: Width/Height
+        # keep their previous values, leaving a cropped ROI. Re-centre to the
+        # full field of view at the new binning (offsets to 0, then size to max).
+        if applied:
+            for off in ("OffsetX", "OffsetY"):
+                feat = getattr(self._cam, off, None)
+                if feat is not None:
+                    try:
+                        feat.set(0)
+                    except Exception:
+                        pass
+            for dim in ("Width", "Height"):
+                feat = getattr(self._cam, dim, None)
+                if feat is not None:
+                    try:
+                        _, hi = feat.get_range()
+                        feat.set(hi)
+                    except Exception:
+                        pass
+
+        if applied:
+            if verbose:
+                w = getattr(self._cam, "Width", None)
+                h = getattr(self._cam, "Height", None)
+                size = f"  frame={w.get()}x{h.get()}" if w and h else ""
+                print(f"Binning applied: {applied}{size}")
+            return applied
+        if verbose:
+            print("Binning not supported on this camera.")
+        return None
+
+    # ------------------------------------------------------------------
+    # Continuous streaming (for live view)
+    # ------------------------------------------------------------------
+
+    def start_streaming(self, buffer_count: int = 5):
+        """Begin continuous async acquisition for live preview.
+
+        Frames arrive on a background thread; read the most recent one with
+        latest_frame(). Unlike capture(), which starts and stops the stream on
+        every call, this keeps the stream running — eliminating the per-frame
+        start/stop overhead that otherwise caps the live-view frame rate.
+
+        Exposure can be changed while streaming; binning cannot — set it before
+        calling this, and call stop_streaming() before changing it back.
+        """
+        if self._cam is None:
+            raise RuntimeError("Camera not connected. Call connect() first.")
+        if self._streaming:
+            return
+
+        def _handler(cam, stream, frame):
+            try:
+                if frame.get_status() == vmbpy.FrameStatus.Complete:
+                    arr = frame.as_numpy_ndarray().squeeze().copy()
+                    with self._frame_lock:
+                        self._latest_frame = arr
+                        self._frame_count += 1
+            finally:
+                cam.queue_frame(frame)
+
+        self._latest_frame = None
+        self._frame_count = 0
+        self._cam.start_streaming(handler=_handler, buffer_count=buffer_count)
+        self._streaming = True
+
+    def latest_frame(self) -> np.ndarray | None:
+        """Return the most recent streamed frame, or None if none has arrived yet."""
+        with self._frame_lock:
+            return self._latest_frame
+
+    @property
+    def frame_count(self) -> int:
+        """Total frames delivered since start_streaming() — for measuring FPS."""
+        with self._frame_lock:
+            return self._frame_count
+
+    def stop_streaming(self):
+        if self._streaming:
+            try:
+                self._cam.stop_streaming()
+            except Exception:
+                pass
+            self._streaming = False
+
     # ------------------------------------------------------------------
     # Capture
     # ------------------------------------------------------------------
@@ -338,11 +447,6 @@ class AVTCamera:
         mono_fmts  = (vmbpy.PixelFormat.Mono8,  vmbpy.PixelFormat.Mono10,
                       vmbpy.PixelFormat.Mono12, vmbpy.PixelFormat.Mono16)
         color_fmts = (vmbpy.PixelFormat.Rgb8,)
-
-        # Log format on first capture for diagnostic purposes
-        if not hasattr(self, '_format_logged'):
-            print(f"[Camera] Receiving frames in format: {fmt}")
-            self._format_logged = True
 
         if fmt not in mono_fmts and fmt not in color_fmts:
             target = vmbpy.PixelFormat.Rgb8 if "Bayer" in str(fmt) else vmbpy.PixelFormat.Mono8

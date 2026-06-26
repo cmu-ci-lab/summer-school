@@ -10,9 +10,9 @@ class ThorlabsStage:
     and return values use the chosen unit.
 
     Windows / Linux: connects via USB APT direct (pylablib + libusb).
-    macOS: Apple's FTDI kernel driver claims the device and exposes it as
-    /dev/cu.usbserial-*; we connect through that serial port instead —
-    no kext unloading required.
+    macOS: Apple's FTDI driver ignores Thorlabs' custom PID (0xfaf0), so no
+    /dev/cu.usbserial-* appears. We drive the chip with pyftdi over libusb and
+    hand pylablib an 'ftdi://' URL — no kext or driver install required.
 
     Usage::
         with ThorlabsStage(units="mm") as stage:
@@ -23,6 +23,7 @@ class ThorlabsStage:
 
     _UNIT_SCALE = {"m": 1.0, "mm": 1e3}   # pylablib uses metres; multiply to get user unit
     _THORLABS_VID = 0x0403  # FTDI VID shared by all KDC101 / APT USB devices
+    _THORLABS_PID = 0xfaf0  # Thorlabs' custom FTDI product ID (KDC101 / APT)
 
     def __init__(self, units: str = "mm"):
         if units not in self._UNIT_SCALE:
@@ -63,33 +64,56 @@ class ThorlabsStage:
         print(f"Stage: {self._stage.get_stage()}  |  internal units: {self._stage.get_scale_units()}  |  user units: {self.units}")
 
     def _connect_macos(self):
-        """macOS: Apple's FTDI driver exposes /dev/cu.usbserial-* — use that directly.
+        """macOS: drive the FTDI chip with pyftdi (libusb) — NOT a serial port.
 
-        list_kinesis_devices() requires libusb and won't work while Apple's driver
-        holds the device, so we scan serial ports by VID instead.
+        The KDC101 uses Thorlabs' custom FTDI PID (0xfaf0). On macOS:
+          * Apple's FTDI driver only binds standard PIDs, so NO /dev/cu.usbserial-*
+            is ever created — the serial-port approach can't find the device.
+          * pylablib's default ft232 backend (pyft232 + old libftdi ABI) is broken
+            on arm64 / libftdi 1.5.
+        So we use pyftdi (pure-Python, libusb-based, supports custom PIDs). pyftdi
+        registers an 'ftdi://' URL handler with pyserial; passing ("serial", url)
+        forces pylablib's serial backend over pyftdi and reuses all its motor logic.
+
+        Requires (already in environment.yml): conda-forge libusb + pip pyftdi.
         """
-        import serial.tools.list_ports
-        ports = serial.tools.list_ports.comports()
-        ftdi_ports = [p for p in ports if p.vid == self._THORLABS_VID]
-
-        if not ftdi_ports:
+        try:
+            from pyftdi.ftdi import Ftdi
+            import pyftdi.serialext  # noqa: F401 — import registers 'ftdi://' with pyserial
+        except ImportError as e:
             raise RuntimeError(
-                "No FTDI serial port found. Make sure the KDC101 is plugged in.\n"
-                "Expected: /dev/cu.usbserial-* with VID 0x0403.\n"
-                "Diagnose: python -c \""
-                "import serial.tools.list_ports; "
-                "[print(p.device, hex(p.vid or 0), p.description) "
-                "for p in serial.tools.list_ports.comports()]\""
-            )
-        if len(ftdi_ports) > 1:
-            print(f"Warning: {len(ftdi_ports)} FTDI ports found, using first: {ftdi_ports[0].device}")
+                "pyftdi is required on macOS but is not installed.\n"
+                "Install with: pip install pyftdi   (and conda install -c conda-forge libusb)"
+            ) from e
 
-        port = ftdi_ports[0].device
-        print(f"macOS: connecting via serial port {port}")
-        self._stage = Thorlabs.KinesisMotor(port, scale="stage")
+        # Register Thorlabs' custom PID so pyftdi will recognise the controller.
+        # add_custom_product raises if already registered — harmless on repeat calls.
+        try:
+            Ftdi.add_custom_product(vid=self._THORLABS_VID, pid=self._THORLABS_PID)
+        except ValueError:
+            pass
+
+        # Verify the device is actually on the bus, with a clear error if not.
+        devices = Ftdi.list_devices()
+        if not devices:
+            raise RuntimeError(
+                "No Thorlabs FTDI controller found on the USB bus.\n"
+                f"Expected an FTDI device with VID 0x{self._THORLABS_VID:04x} "
+                f"PID 0x{self._THORLABS_PID:04x} (KDC101).\n"
+                "Check: cable plugged in, controller powered on.\n"
+                "Diagnose: system_profiler SPUSBDataType | grep -i -A3 thorlabs"
+            )
+        if len(devices) > 1:
+            print(f"Warning: {len(devices)} Thorlabs FTDI devices found, using first.")
+
+        url = f"ftdi://0x{self._THORLABS_VID:x}:0x{self._THORLABS_PID:x}/1"
+        print(f"macOS: connecting to KDC101 via {url}")
+        # ("serial", url) forces pylablib's serial backend (over pyftdi), bypassing
+        # the broken ft232 backend. scale="stage" auto-detects the actuator.
+        self._stage = Thorlabs.KinesisMotor(("serial", url), scale="stage")
 
         info = self._stage.get_device_info()
-        print(f"Connected: model={info.model_no}  serial={info.serial_no}")
+        print(f"Connected: model={info.model_no}  serial={info.serial_no}  fw={info.fw_ver}")
         print(f"Stage: {self._stage.get_stage()}  |  internal units: {self._stage.get_scale_units()}  |  user units: {self.units}")
 
     def release(self):

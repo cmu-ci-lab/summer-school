@@ -93,6 +93,7 @@ def connect_stage():
         stage = ThorlabsStage(units="mm")
         stage.connect()
         print("Stage connected — arrow keys (or w/s) move it.")
+        stage.home()
         return stage
     except Exception as e:
         print(f"No stage found ({e}); running camera-only.")

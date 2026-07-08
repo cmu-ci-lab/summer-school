@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 # ── Settings ──────────────────────────────────────────────────────────────────
-DEPTH_PATH = Path("coin_captures_0161H/stack_depth.npy")
+DEPTH_PATH = Path("coin_captures_ids_new_test/stack_20260626_155621_depth.npy")
 
-DEPTH_MIN  = None      # set e.g. 20, or None for auto
-DEPTH_MAX  = None
+DEPTH_MIN  = 60      # set e.g. 20, or None for auto
+DEPTH_MAX  = 80
 CMAP       = "viridis"
 # ──────────────────────────────────────────────────────────────────────────────
 

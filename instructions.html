@@ -971,5 +971,27 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
 
   </div></main>
 </div>
+
+<script>
+  // Auto-play videos as they scroll into view (and pause when they leave).
+  // Videos are muted, so browsers allow programmatic play. Skipped when the
+  // user prefers reduced motion.
+  (function () {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!("IntersectionObserver" in window)) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        var v = e.target;
+        if (e.isIntersecting) {
+          var p = v.play();
+          if (p && p.catch) p.catch(function () {});
+        } else {
+          v.pause();
+        }
+      });
+    }, { threshold: 0.4 });
+    document.querySelectorAll("video").forEach(function (v) { io.observe(v); });
+  })();
+</script>
 </body>
 </html>

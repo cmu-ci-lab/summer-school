@@ -232,6 +232,7 @@
       <a href="#a9"><span class="side-num">5</span>Scanning other objects</a>
       <p class="side-part">Appendix</p>
       <a href="#software"><span class="side-num">·</span>Software installations</a>
+      <a href="#troubleshooting"><span class="side-num">·</span>Troubleshooting</a>
     </nav>
   </aside>
 
@@ -512,7 +513,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
       <h3><span class="step-num">3</span>Collimating the LED</h3>
       <ol class="sub">
         <li>Set the lens to infinity focusing.
-          <figure><img src="instructions_media/p13_y0088_0.jpg" alt="Lens focus ring set to infinity" width="420"></figure>
+          <figure>
+            <video src="instructions_media/hw_mirror_infinity.mp4" controls muted loop playsinline preload="metadata" width="300"></video>
+            <figcaption><span class="vid-badge">video</span>Turn the focus ring until the <strong>∞</strong>
+            symbol sits over the index mark in the distance window (highlighted by the green box).</figcaption>
+          </figure>
         </li>
         <li>Adjust the telescoping tube until the images of the active element of the LED (this may look
         different for each LED) look as sharp as possible.
@@ -525,6 +530,8 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             <figcaption><span class="vid-badge">video</span>Collimating: the two images of the LED's active
             element sharpen up as the telescoping tube is adjusted.</figcaption>
           </figure>
+          <div class="note"><strong>Note:</strong> LEDs come in different shapes, so don't expect yours to
+          look like the one in the video — it just has to come into focus.</div>
           <div class="note tip"><strong>Tip:</strong> You may choose to block one of the arms using a piece of
           card to make alignment easier.</div>
         </li>
@@ -561,20 +568,27 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             <figcaption><span class="vid-badge">video</span>Changing the lens focusing — turn the focus ring
             on the Nikon lens.</figcaption>
           </figure>
-          <div class="note tip"><strong>Tip:</strong> Laterally translate the mirror using the micro-adjusters
-          until you see the edge of the mirror, so it is easy to see if it comes into focus. You may also use
-          dust or scratches present on the mirror.</div>
+          <figure>
+            <video src="instructions_media/viz_focus_1to1.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
+            <figcaption><span class="vid-badge">video</span>Bringing the mirror surface into focus at about
+            1:1 — watch the dust and scratches on the glass sharpen up.</figcaption>
+          </figure>
+          <p>You will need to increase the exposure time and/or LED power.</p>
+        </li>
+        <li>Use the mirror itself to help with focusing.
+          <div class="note tip"><strong>Tip:</strong> Laterally move the mirror using the micro-adjusters
+          until its edge comes into view, and make sure to focus on the edge — it gives you something sharp
+          to judge the focus by. You may also use dust or scratches present on the mirror.</div>
           <figure>
             <video src="instructions_media/hw_mirror_focusing.mp4" controls muted loop playsinline preload="metadata" width="300"></video>
             <figcaption><span class="vid-badge">video</span>Laterally translating the mirror with the stage's
             micro-adjuster to bring its edge into view.</figcaption>
           </figure>
           <figure>
-            <video src="instructions_media/viz_focusing_on_glass.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
-            <figcaption><span class="vid-badge">video</span>Bringing the mirror surface into focus — watch the
-            dust and scratches on the glass sharpen up.</figcaption>
+            <video src="instructions_media/viz_focus_edge.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
+            <figcaption><span class="vid-badge">video</span>Focusing on the mirror's edge until it is
+            sharp.</figcaption>
           </figure>
-          <p>You will need to increase the exposure time and/or LED power.</p>
         </li>
         <li>Unblock the mirror on the motorized stage and select a <strong>patch</strong> on the live view —
         two clicks: the first anchors a corner, the second finalizes it. The coherence panel now tracks that
@@ -601,6 +615,8 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         too large and you can step clean over the region where the interference appears. Somewhere along the
         sweep the pathlengths match: you will see the fringes appear in the live view, and a
         <strong>sharp peak</strong> in the panel.
+          <div class="warn"><strong>Caution:</strong> the backwards keys (<kbd>s</kbd>/<kbd>d</kbd>) should
+          only be used to move the mirror back into position — do not sweep with them.</div>
           <figure>
             <video src="instructions_media/viz_coherence_sweep.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
             <figcaption><span class="vid-badge">video</span>Stepping the stage with a patch selected: the plot
@@ -694,7 +710,8 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         FWHM, e.g. ~28&nbsp;µm coherence → 5–10&nbsp;µm steps. The captured stack may take a while to save.
         For the example below we used a <strong>0.9&nbsp;mm range with 3&nbsp;µm steps</strong>, centred on
         the peak found above. The frame count is computed for you (range/step&nbsp;+&nbsp;1), and if you leave
-        out <code>--exposure</code> the scan keeps the exposure you dialed in with the visualizer:
+        out <code>--exposure</code> the scan reuses the exposure from your last visualizer session
+        (it is recorded in <code>last_exposure.json</code> whenever you adjust it):
 <pre><code><span class="cm"># 0.9 mm range x 0.003 mm steps = 301 frames, centred on the coherence peak</span>
 python oct_scan.py --center 12.45 --range-mm 0.9 --step-mm 0.003</code></pre>
           <p>This saves a timestamped <code>stack_*.npy</code> plus a <code>*_meta.json</code> sidecar with the

@@ -45,9 +45,9 @@ def main():
                         "shrinks the stack by N^2 and is recorded in the "
                         "metadata so the lateral scale stays correct")
     p.add_argument("--exposure", type=float, default=None,
-                   help="exposure in microseconds (default: keep whatever "
-                        "the sensor is currently set to, e.g. from the "
-                        "visualizer session)")
+                   help="exposure in microseconds (default: the value from "
+                        "your last visualizer session — last_exposure.json — "
+                        "else whatever the sensor is currently set to)")
     p.add_argument("--gain", type=float, default=0.0,
                    help="camera gain (default 0)")
     p.add_argument("--save-dir", default="oct_scans",
@@ -69,7 +69,20 @@ def main():
                          f"{args.center:g} mm with range {args.range_mm:g} mm.")
     end = start + (n_frames - 1) * args.step_mm
     ds = max(args.downsample, 1)
-    exp_s = f"{args.exposure:g} us" if args.exposure is not None else "current sensor value"
+
+    # Exposure: CLI value > last visualizer session (last_exposure.json) >
+    # whatever the sensor currently reports. The file exists because the IDS
+    # driver resets exposure to ~1/framerate on re-init, so the sensor itself
+    # cannot carry a visualizer-dialed value between programs.
+    exposure = args.exposure
+    if exposure is None:
+        from exposure_store import load_exposure
+        stored = load_exposure()
+        if stored is not None:
+            exposure, age = stored
+            print(f"Using exposure from your last visualizer session: "
+                  f"{exposure:g} µs  (saved {age})")
+    exp_s = f"{exposure:g} us" if exposure is not None else "current sensor value"
     print(f"Scan: {n_frames} frames x {args.step_mm:g} mm  "
           f"({start:g} -> {end:g} mm, centre {args.center:g})   exposure {exp_s}"
           + (f"   downsample {ds}x{ds}" if ds > 1 else ""))
@@ -80,7 +93,7 @@ def main():
 
     stage = ThorlabsStage(units="mm")
     stage.connect()
-    cam = Camera(exposure_us=args.exposure, gain_db=args.gain,
+    cam = Camera(exposure_us=exposure, gain_db=args.gain,
                  save_dir=args.save_dir,
                  prefer=None if args.camera == "auto" else args.camera)
     cam.connect()

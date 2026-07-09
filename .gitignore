@@ -17,3 +17,4 @@ setupA_test/
 
 # OS / editor cruft
 .DS_Store
+last_exposure.json

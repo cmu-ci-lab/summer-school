@@ -772,11 +772,19 @@ def main():
         live_binning = 1
 
     def apply_exposure(shown_us):
-        """Set the camera exposure compensated for binning brightness gain."""
+        """Set the camera exposure compensated for binning brightness gain.
+
+        Also recorded to last_exposure.json so oct_scan.py can reuse the value
+        — the IDS driver resets exposure on re-init, so the sensor itself
+        can't carry it between programs.
+        """
         try:
             cam.set_exposure(max(shown_us / (live_binning ** 2), 1))
         except Exception as e:
             print(f"Could not set exposure: {e}")
+            return
+        from exposure_store import save_exposure
+        save_exposure(shown_us)
 
     apply_exposure(exposure_us)
 

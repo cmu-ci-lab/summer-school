@@ -582,7 +582,7 @@ python visualizer.py --binning 2 --exposure 10000   <span class="c"># bin if the
 <p>Once you know the exposure and where the coherence function peaks, record the sweep as a Z-stack and process it into an OCT depth map.</p>
 
 <h3 id="cap-scan">Capturing a stack: oct_scan.py</h3>
-<p><code>oct_scan.py</code> homes the stage, sweeps it in fixed steps, captures one frame per position, and saves everything. You give it the three numbers that define the scan — <strong>centre position</strong> (take it straight from the visualizer's peak tile), <strong>scan range</strong>, and <strong>step size</strong>; the frame count is computed for you (range/step&nbsp;+&nbsp;1). If you don't pass <code>--exposure</code>, the scan keeps whatever exposure the sensor is currently set to — so the value you dialed in with the visualizer carries over automatically:</p>
+<p><code>oct_scan.py</code> homes the stage, sweeps it in fixed steps, captures one frame per position, and saves everything. You give it the three numbers that define the scan — <strong>centre position</strong> (take it straight from the visualizer's peak tile), <strong>scan range</strong>, and <strong>step size</strong>; the frame count is computed for you (range/step&nbsp;+&nbsp;1). If you don't pass <code>--exposure</code>, the scan reuses the exposure from your last visualizer session (recorded in <code>last_exposure.json</code> every time you adjust it) — so the value you dialed in carries over automatically:</p>
 <pre><code>python oct_scan.py --center 1.70 --range-mm 0.4 --step-mm 0.001   <span class="c"># 401 frames</span>
 python oct_scan.py --center 1.70 --range-mm 0.4 --step-mm 0.002 \
     --exposure 8000 --save-dir coin_scan
@@ -594,7 +594,7 @@ python oct_scan.py ... --no-home     <span class="c"># stage already homed this 
   <tr><td><code>--range-mm</code></td><td>Total scan range in mm, centred on <code>--center</code> — make it comfortably wider than the coherence function</td><td>0.4</td></tr>
   <tr><td><code>--step-mm</code></td><td>Stage step per frame in mm. Sample the coherence function finely: several frames per coherence FWHM. Frames = range/step + 1</td><td>0.001</td></tr>
   <tr><td><code>-n, --downsample</code></td><td>Spatially average N×N pixel patches per frame before saving — shrinks the stack by N² and is recorded in the metadata</td><td>1</td></tr>
-  <tr><td><code>--exposure</code></td><td>Exposure in µs. If omitted, the sensor's <em>current</em> exposure is kept (i.e. the one you set in the visualizer)</td><td>current</td></tr>
+  <tr><td><code>--exposure</code></td><td>Exposure in µs. If omitted, the value from your last visualizer session is reused (saved in <code>last_exposure.json</code> — the IDS driver resets exposure on reconnect, so the sensor itself can't carry it)</td><td>last session</td></tr>
   <tr><td><code>--save-dir</code></td><td>Output directory — use a fresh name per scan</td><td>oct_scans</td></tr>
   <tr><td><code>--camera</code></td><td><code>auto</code>, <code>avt</code>, or <code>ids</code></td><td>auto</td></tr>
   <tr><td><code>--no-home</code></td><td>Skip homing (faster when re-scanning in one session)</td><td>—</td></tr>

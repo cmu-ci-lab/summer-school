@@ -734,8 +734,10 @@ def main():
                         help="on-sensor binning factor for the preview "
                              "(default 1 = full resolution; try 2 or 4 if the "
                              "preview lags)")
-    parser.add_argument("--exposure", type=float, default=10000,
-                        help="initial exposure in microseconds, non-binned-equivalent (default 10000)")
+    parser.add_argument("--exposure", type=float, default=None,
+                        help="initial exposure in microseconds, non-binned-"
+                             "equivalent (default: your last session's value "
+                             "from last_exposure.json, else 10000)")
     parser.add_argument("--gamma", type=float, default=2.2,
                         help="display gamma; >1 brightens dark scenes (default 2.2, 1.0 = linear)")
     parser.add_argument("--window-mm", type=float, default=0.2,
@@ -747,11 +749,24 @@ def main():
     args = parser.parse_args()
     gamma = args.gamma
 
+    # Default exposure: pick up where the last session left off (the value is
+    # saved to last_exposure.json on every adjustment).
+    exposure_init = args.exposure
+    if exposure_init is None:
+        from exposure_store import load_exposure
+        stored = load_exposure()
+        if stored is not None:
+            exposure_init, age = stored
+            print(f"Restoring exposure from your last session: "
+                  f"{exposure_init:g} µs  (saved {age})")
+        else:
+            exposure_init = 10000
+
     txt = Text()
 
     print("Initializing camera...")
     from camera import Camera
-    cam = Camera(exposure_us=args.exposure, gain_db=0.0, save_dir="live_view_captures")
+    cam = Camera(exposure_us=exposure_init, gain_db=0.0, save_dir="live_view_captures")
     cam.connect()
 
     stage = connect_stage()

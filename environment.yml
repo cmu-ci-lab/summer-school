@@ -16,7 +16,15 @@ dependencies:
       - pylablib==1.4.5
       - pyftdi
 
-      # vmbpy is NOT on PyPI — installed from local Vimba X SDK wheel by setup.sh
+      # Camera SDKs are deliberately NOT part of the base environment — which
+      # camera is used gets decided later. Install per vendor (see docs.html
+      # "Camera SDK" section):
+      #   Allied Vision : Vimba X SDK, then pip install its bundled vmbpy wheel
+      #                   (vmbpy is NOT on PyPI; setup.sh finds the wheel).
+      #   IDS uEye      : IDS Software Suite (ids-imaging.com), then
+      #                   pip install pyueye (binding only — needs the Suite).
+      # camera.py auto-detects whichever one is installed (AVT first, then IDS).
+      #
       # Platform support:
       #   Windows : fully supported
       #   Ubuntu  : pylablib USB APT confirmed working; vmbpy needs Linux Vimba X SDK

@@ -1,4 +1,4 @@
-from depth_from_focus import compute_mean_diff
+from oct import compute_mean_diff
 import argparse
 import numpy as np
 from pathlib import Path
@@ -10,7 +10,7 @@ DOWNSAMPLE = 1   # spatially average NxN pixel patches (1 = no downsampling)
 
 # Command-line overrides. parse_known_args so this stays usable when run cell-by-
 # cell (e.g. in an interactive/notebook session where extra argv may be present).
-_parser = argparse.ArgumentParser(description="Depth-from-focus on a captured stack.")
+_parser = argparse.ArgumentParser(description="OCT depth map from a captured Z-stack.")
 _parser.add_argument("-n", "--downsample", type=int, default=DOWNSAMPLE,
                      help=f"spatially average NxN pixel patches (default {DOWNSAMPLE}, 1 = off)")
 _parser.add_argument("-s", "--stack", type=Path, default=STACK_PATH,

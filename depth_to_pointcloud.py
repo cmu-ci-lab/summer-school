@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-depth_to_pointcloud.py — turn a depth-index map (from run_depth.py) into a
+depth_to_pointcloud.py — turn a depth-index map (from oct_process.py) into a
 metric point cloud (.ply).
 
 Geometry:
   * Lateral (x, y): the system is ~1:1 magnification, so a pixel on the sensor
     is a pixel on the object — the scale is the sensor pixel pitch. The pitch
     is taken from (in priority order): --pixel-um, the scan's _meta.json
-    (written by move_stage.py), or by connecting the camera and reading its
-    sensor info. A capture downsampled by N (run_depth --downsample, the _dsN
+    (written by oct_scan.py), or by connecting the camera and reading its
+    sensor info. A capture downsampled by N (oct_process --downsample, the _dsN
     file tag) multiplies the pitch by N.
   * Axial (z): depth indices are frame numbers; z = index * frame_stride *
     step_mm. step_mm comes from --step-mm or the _meta.json. frame_stride
-    defaults to 2 because run_depth.py feeds every other frame
+    defaults to 2 because oct_process.py feeds every other frame
     (frames[:, :, ::2]) into compute_mean_diff. Higher index = farther from
     the camera; pass --invert-z to flip z into a "height" instead.
 
-The sibling *_maxamp.npy (saved by run_depth.py) is used, when present, as a
+The sibling *_maxamp.npy (saved by oct_process.py) is used, when present, as a
 per-point intensity, and --amp-percentile drops the lowest-amplitude points —
-those are the pixels where depth-from-focus found no clear peak.
+those are the pixels where the OCT envelope had no clear peak.
 
 Usage:
     python depth_to_pointcloud.py coin_captures_ids_new_test/stack_x_ds2_depth.npy
@@ -33,13 +33,13 @@ import struct
 import numpy as np
 from pathlib import Path
 
-# run_depth.py computes on frames[:, :, ::2], so one depth index = 2 captured
+# oct_process.py computes on frames[:, :, ::2], so one depth index = 2 captured
 # frames = 2 stage steps.
 DEFAULT_FRAME_STRIDE = 2
 
 
 def find_meta(depth_path: Path):
-    """Locate the _meta.json saved next to the stack by move_stage.py.
+    """Locate the _meta.json saved next to the stack by oct_scan.py.
 
     Depth files are named <stack-stem>[_dsN]_depth.npy — strip those suffixes
     to recover the stack stem.
@@ -91,7 +91,7 @@ def write_ply(path: Path, xyz: np.ndarray, intensity: np.ndarray = None):
 def main():
     parser = argparse.ArgumentParser(
         description="Convert a depth-index map to a metric point cloud (.ply).")
-    parser.add_argument("depth", type=Path, help="path to *_depth.npy from run_depth.py")
+    parser.add_argument("depth", type=Path, help="path to *_depth.npy from oct_process.py")
     parser.add_argument("--pixel-um", type=float, default=None,
                         help="sensor pixel pitch in um (1:1 magnification -> lateral "
                              "scale). Default: _meta.json, then query the camera.")
@@ -100,7 +100,7 @@ def main():
                              "Default: _meta.json.")
     parser.add_argument("--frame-stride", type=int, default=DEFAULT_FRAME_STRIDE,
                         help="captured frames per depth index (default "
-                             f"{DEFAULT_FRAME_STRIDE}: run_depth uses every "
+                             f"{DEFAULT_FRAME_STRIDE}: oct_process uses every "
                              "other frame)")
     parser.add_argument("--downsample", type=int, default=None,
                         help="lateral downsample factor of the depth map. "
@@ -135,7 +135,7 @@ def main():
     if step_mm is None and meta:
         step_mm = meta.get("step_mm")
     if step_mm is None:
-        raise SystemExit("Stage step unknown: pass --step-mm (move_stage.py "
+        raise SystemExit("Stage step unknown: pass --step-mm (oct_scan.py "
                          "used 0.001) or re-capture so _meta.json exists.")
     dz_mm = step_mm * args.frame_stride
     print(f"Axial: {step_mm:g} mm/frame x stride {args.frame_stride} "

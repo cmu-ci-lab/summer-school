@@ -44,7 +44,7 @@ def compute_mean_diff(
     avg_type: str = "local",
     temporal_window: int = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Compute per-frame interference amplitude image (depth-from-focus measure).
+    """Compute per-frame interference amplitude image (OCT envelope measure).
 
     Args:
         frames:          (H, W, N) uint8, uint16, or float array.
@@ -111,7 +111,7 @@ def _save_colormap(array: np.ndarray, path: Path, cmap: str = "viridis", title: 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Compute depth-from-focus map from a .npy frame stack.")
+    parser = argparse.ArgumentParser(description="Compute OCT depth map from a .npy Z-stack.")
     parser.add_argument("stack",           type=str,   help="Path to input .npy stack (H x W x N).")
     parser.add_argument("--patch-size",    type=int,   default=5,       help="Spatial patch size (default 5).")
     parser.add_argument("--avg-type",      type=str,   default="local",  help="'local' or 'global' (default local).")

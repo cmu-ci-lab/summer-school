@@ -65,7 +65,13 @@ class IDSCamera:
         self._width  = int(sensor.nMaxWidth)
         self._height = int(sensor.nMaxHeight)
         name = sensor.strSensorName.decode()
-        print(f"Connected [IDS uEye]: {name}  {self._width}x{self._height}")
+        # Sensor pixel pitch: SENSORINFO.wPixelSize is in units of 0.01 µm.
+        try:
+            self.pixel_size_um = float(int(sensor.wPixelSize)) / 100.0 or None
+        except Exception:
+            self.pixel_size_um = None
+        pitch = f"  pitch {self.pixel_size_um:g} um" if self.pixel_size_um else ""
+        print(f"Connected [IDS uEye]: {name}  {self._width}x{self._height}{pitch}")
 
         # Try monochrome modes from highest to lowest native bit depth
         _MONO_MODES = [

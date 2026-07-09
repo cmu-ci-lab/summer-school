@@ -55,6 +55,16 @@ class AVTCamera:
         is_gige = self._is_gige()
         transport = "GigE" if is_gige else "USB"
         print(f"Connected [{transport}]: {self._cam.DeviceModelName.get()}  (id: {self._cam.get_id()})")
+        # Sensor pixel pitch in µm, when the camera exposes it (GenICam name
+        # varies by model; None if unavailable — pass it explicitly downstream).
+        self.pixel_size_um = None
+        for feat in ("SensorPixelWidth", "SensorPixelSize", "PixelSize"):
+            try:
+                self.pixel_size_um = float(self._cam.get_feature_by_name(feat).get())
+                print(f"Sensor pixel pitch: {self.pixel_size_um:g} um")
+                break
+            except Exception:
+                pass
         self.save_dir.mkdir(parents=True, exist_ok=True)
         print(f"Saving to: {self.save_dir.resolve()}")
         self._apply_settings()

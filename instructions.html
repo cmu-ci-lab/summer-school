@@ -226,8 +226,9 @@
       <p class="side-part">Part 2 · Alignment</p>
       <a href="#a0"><span class="side-num">1</span>Hardware sanity check</a>
       <a href="#a1"><span class="side-num">2</span>Light into the camera</a>
-      <a href="#a2"><span class="side-num">3</span>Collimating the LED</a>
-      <a href="#a3"><span class="side-num">4</span>Aligning the mirrors</a>
+      <a href="#viz-tour"><span class="side-num">3</span>Getting to know the visualizer</a>
+      <a href="#a2"><span class="side-num">4</span>Collimating the LED</a>
+      <a href="#a3"><span class="side-num">5</span>Aligning the mirrors</a>
       <p class="side-part">Part 3 · OCT</p>
       <a href="#a5"><span class="side-num">1</span>Coarse pathlength matching</a>
       <a href="#a6"><span class="side-num">2</span>Fine pathlength matching</a>
@@ -516,8 +517,37 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
       </ol>
     </section>
 
+    <section class="step" id="viz-tour">
+      <h3><span class="step-num">3</span>Getting to know the visualizer</h3>
+      <p>Everything in the rest of this guide happens inside the visualizer, so it is worth
+      <strong>taking some time now to play around with it</strong> — jog the stage, change the exposure,
+      select and clear patches, zoom around the plot. Nothing you do here can break anything, and being
+      fluent with the controls makes the alignment steps much faster.</p>
+
+      <h4>Anatomy of the visualizer</h4>
+      <figure><img src="instructions_media/viz_full.jpg" alt="The visualizer: live camera view on the left, coherence scan panel on the right, status bar along the bottom" width="640"></figure>
+      <ul class="plain">
+        <li><strong>Left — live camera view.</strong> The raw camera feed. Click twice on it to select a
+        <em>patch</em> (first click anchors a corner, second finalizes); the blue box marks the patch being
+        tracked.</li>
+        <li><strong>Right — coherence scan panel.</strong> Three stat tiles up top:
+        <em>coherence FWHM</em> and <em>peak</em> (filled in once a full envelope has been swept through) and
+        the live <em>amplitude</em> of the selected patch. Below them, the plot builds up patch amplitude vs
+        stage position as the stage moves. Scroll the mouse wheel over it to zoom, drag to pan.</li>
+        <li><strong>Bottom — status bar.</strong> Exposure (µs), gamma, frame rate, and binning on the left;
+        the current stage position and the coarse&thinsp;/&thinsp;fine step sizes in the middle; key hints on
+        the right.</li>
+      </ul>
+      <p><strong>Keyboard controls</strong> — <kbd>w</kbd>/<kbd>s</kbd> jog the stage by the coarse step
+      (hold to sweep), <kbd>e</kbd>/<kbd>d</kbd> by the fine step, <kbd>[</kbd>/<kbd>]</kbd> change the step
+      size, <kbd>+</kbd>/<kbd>-</kbd> change exposure, <kbd>a</kbd> autoscales the plot, <kbd>c</kbd> clears
+      the patch and plot, <kbd>r</kbd> resets the plot but keeps the patch, and <kbd>q</kbd> quits.</p>
+      <div class="note"><strong>Note:</strong> the exact layout may change a little as the tool evolves —
+      that's ok; the three pieces (live view, coherence panel, status bar) stay the same.</div>
+    </section>
+
     <section class="step" id="a2">
-      <h3><span class="step-num">3</span>Collimating the LED</h3>
+      <h3><span class="step-num">4</span>Collimating the LED</h3>
       <ol class="sub">
         <li>Set the lens to infinity focusing.
           <figure>
@@ -546,7 +576,7 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
     </section>
 
     <section class="step" id="a3">
-      <h3><span class="step-num">4</span>Aligning the mirrors</h3>
+      <h3><span class="step-num">5</span>Aligning the mirrors</h3>
       <p>Use the adjusters on the mirror mounts to position both images of the LED roughly at the center
       of the field of view of the camera.</p>
       <figure>
@@ -705,6 +735,14 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         (hold <kbd>w</kbd>, repositioning with <kbd>s</kbd> as needed) once again, over a length comparable to the error due to the difference
         in thickness of the coin and the mirror (1–2&nbsp;mm). The peak in the coherence panel gives you a
         ‘center’ position around which we will perform the scan.
+          <p>When you are at the right depth, you should see this <strong>moving speckle</strong> inside the
+          highlighted patch — the coin's rough surface makes the interference grainy and shimmering rather
+          than smooth fringes:</p>
+          <figure>
+            <video src="instructions_media/viz_speckle.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
+            <figcaption><span class="vid-badge">video</span>Moving speckle in the highlighted patch — the sign
+            that the stage is at the coin surface's depth.</figcaption>
+          </figure>
           <figure>
             <video src="instructions_media/viz_coin_path_matching.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
             <figcaption><span class="vid-badge">video</span>Pathlength matching on the coin — this is an
@@ -870,7 +908,7 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
 
       <div class="note"><strong>Where's the wheel?</strong> Once you install Vimba&nbsp;X, the vmbpy wheel is
       <em>inside</em> the installed SDK (at the paths listed above) — you don't download it separately. If
-      you can't find it, run <code>./python test_hardware.py</code>: it searches the standard install
+      you can't find it, run <code>python test_hardware.py</code>: it searches the standard install
       locations for you and prints the wheel's path along with the exact <code>pip install</code> command.</div>
       <div class="note tip"><strong>Tip:</strong> on either platform, install the vmbpy wheel into the
       <em>project environment</em> (activate <code>iccp-oct</code> or the venv first, then

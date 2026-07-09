@@ -342,6 +342,7 @@ cd summer-school</code></pre>
 ./setup.sh
 <span class="c"># or, to force a venv even when conda exists:</span>
 FORCE_VENV=1 ./setup.sh</code></pre>
+<p>On Windows without Git Bash, run <code>setup.bat</code> from the Command Prompt instead — it does the same thing. And if you'd rather skip the script entirely and already have conda, create the environment directly: <code>conda env create -f environment.yml</code> then <code>conda activate iccp-oct</code> (you'll still need your camera SDK, and on macOS <code>libusb</code> + <code>pyftdi</code> for the stage).</p>
 <p>It creates or updates the <code>iccp-oct</code> environment from <code>environment.yml</code> (Python 3.12, numpy, scipy, matplotlib, OpenCV, pyserial, pylablib, pyftdi), registers a Jupyter kernel, and prints activation instructions when it finishes:</p>
 <pre><code><span class="c"># conda path</span>
 conda activate iccp-oct

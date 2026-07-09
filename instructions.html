@@ -278,6 +278,8 @@
           <figure><img src="instructions_media/p03_y0073_0.jpg" alt="LED with telescoping tube being attached" width="420"></figure>
         </li>
         <li>Connect the LED to the LED driver, and try powering it up with the power adapter.
+          <div class="warn"><strong>Careful:</strong> the LED can be very bright — try not to look directly
+          into it. Turn the driver's power knob down before switching it on.</div>
           <div class="figgrid">
             <img src="instructions_media/p03_y0391_1.jpg" alt="Connecting the LED cable to the driver">
             <img src="instructions_media/p03_y0389_2.jpg" alt="Powering up the LED driver">
@@ -470,7 +472,8 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li>Adjust your camera to be roughly upright by rotating it about the rotation mount with graduations.
           <figure><img src="instructions_media/p12_y0102_0.jpg" alt="Rotating the camera on its graduated mount" width="380"></figure>
         </li>
-        <li>Switch on the LED, and try to coarsely align the orientation of the mirrors to get maximum light
+        <li>Switch on the LED (careful — it can be very bright; avoid looking directly into it), and try to
+        coarsely align the orientation of the mirrors to get maximum light
         into the camera by:
           <ol class="roman">
             <li>coarsely adjusting the mirror post mounts,</li>
@@ -754,6 +757,16 @@ cd summer-school</code></pre>
 ./setup.sh
 <span class="cm"># or, to force a venv even when conda exists:</span>
 FORCE_VENV=1 ./setup.sh</code></pre>
+      <p>On Windows without Git&nbsp;Bash, run <code>setup.bat</code> from the Command Prompt instead — it
+      does the same thing (finds conda or falls back to a venv, installs the vmbpy wheel if Vimba&nbsp;X is
+      present, registers the Jupyter kernel):</p>
+<pre><code>setup.bat</code></pre>
+      <p><strong>Alternative: manual conda install</strong> — if you'd rather not run the script and already
+      have conda, you can create the environment directly from <code>environment.yml</code>:</p>
+<pre><code>conda env create -f environment.yml
+conda activate iccp-oct</code></pre>
+      <p>(You'll still need to install your camera's SDK/bindings by hand — see below — and on macOS,
+      <code>conda install -c conda-forge libusb</code> plus <code>pip install pyftdi</code> for the stage.)</p>
       <p>It creates or updates the <code>iccp-oct</code> environment from <code>environment.yml</code>
       (Python&nbsp;3.12, numpy, scipy, matplotlib, OpenCV, pyserial, pylablib, pyftdi), registers a Jupyter
       kernel, and prints activation instructions when it finishes:</p>

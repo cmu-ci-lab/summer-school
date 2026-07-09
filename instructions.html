@@ -785,9 +785,10 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
 
       <p><strong>IDS cameras: pyueye</strong> — IDS uEye cameras need two pieces:</p>
       <ul class="plain">
-        <li><strong>The IDS Software Suite</strong> (the uEye SDK and driver) from
-        <a href="https://en.ids-imaging.com">ids-imaging.com</a> — this is the native driver the Python
-        bindings talk to. Without it, <code>pyueye</code> imports but every call fails.</li>
+        <li><strong>The IDS Software Suite</strong> (the uEye SDK and driver) — download
+        <a href="https://en.ids-imaging.com/download-details/AB00615.html">IDS Software Suite 4.97 for
+        Windows 32/64-bit</a>. This is the native driver the Python bindings talk to; without it,
+        <code>pyueye</code> imports but every call fails.</li>
         <li><strong>The Python bindings:</strong> <code>pip install pyueye</code> into the project
         environment.</li>
       </ul>

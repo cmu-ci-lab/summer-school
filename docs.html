@@ -362,7 +362,7 @@ source .venv/bin/activate        <span class="c"># Windows: .venv\Scripts\activa
 <h3 id="install-ids">IDS cameras: pyueye</h3>
 <p>IDS uEye cameras need two pieces:</p>
 <ol class="steps">
-  <li><strong>The IDS Software Suite</strong> (the uEye SDK and driver) from <a href="https://en.ids-imaging.com">ids-imaging.com</a> — this is the native driver the Python bindings talk to. Without it, <code>pyueye</code> imports but every call fails.</li>
+  <li><strong>The IDS Software Suite</strong> (the uEye SDK and driver) — download <a href="https://en.ids-imaging.com/download-details/AB00615.html">IDS Software Suite 4.97 for Windows 32/64-bit</a>. This is the native driver the Python bindings talk to; without it, <code>pyueye</code> imports but every call fails.</li>
   <li><strong>The Python bindings:</strong> <code>pip install pyueye</code> into the project environment.</li>
 </ol>
 <p>That's it — no wheel hunting. If you're on IDS hardware you can skip Vimba X entirely; pass <code>--camera ids</code> to the hardware test so it doesn't check for vmbpy.</p>

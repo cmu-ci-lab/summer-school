@@ -10,6 +10,10 @@ venv/
 *.mp4
 coin_captures_*/
 test_captures/
+setupA_test/
+
+# ...but the compressed guide videos are doc assets, keep them
+!instructions_media/*.mp4
 
 # OS / editor cruft
 .DS_Store

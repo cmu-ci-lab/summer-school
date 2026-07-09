@@ -228,7 +228,7 @@
 
   <div class="file-grid">
     <div class="file-card"><div class="filename">stage.py</div><p>ThorlabsStage class — motor control in mm or m</p></div>
-    <div class="file-card"><div class="filename">capture_camera.py</div><p>AVTCamera class — capture, buffer, save</p></div>
+    <div class="file-card"><div class="filename">avt_camera.py</div><p>AVTCamera class — capture, buffer, save</p></div>
     <div class="file-card"><div class="filename">oct.py</div><p>compute_mean_diff — focus-based depth reconstruction</p></div>
     <div class="file-card"><div class="filename">oct_scan.py</div><p>Acquisition script — sweep stage and build stack</p></div>
     <div class="file-card"><div class="filename">oct_process.py</div><p>Processing script — load stack and output depth map</p></div>
@@ -267,7 +267,7 @@ conda activate iccp-oct
             Linux: <code>/opt/VimbaX_*/api/python/</code><br>
             macOS: <code>/Users/Shared/Allied Vision/Vimba X/Vmbpy/</code></td>
         <td>installed system-wide by the Suite</td></tr>
-    <tr><td>Driver module</td><td><code>capture_camera.py</code></td><td><code>ids_camera.py</code></td></tr>
+    <tr><td>Driver module</td><td><code>avt_camera.py</code></td><td><code>ids_camera.py</code></td></tr>
   </table>
 
 <pre><code><span class="cm"># Allied Vision — after installing Vimba X (setup.sh finds the wheel automatically)</span>
@@ -317,11 +317,11 @@ pip install pyueye</code></pre>
   <p>Pass <code>units="m"</code> or <code>units="mm"</code> at construction. All inputs and outputs (<code>move_to</code>, <code>move_by</code>, <code>position</code>) use the chosen unit. Internally pylablib always works in metres; the class multiplies/divides transparently.</p>
 
   <!-- ════════════ CAMERA ════════════ -->
-  <h2 id="camera">AVTCamera <span class="badge badge-purple">capture_camera.py</span></h2>
+  <h2 id="camera">AVTCamera <span class="badge badge-purple">avt_camera.py</span></h2>
   <p>Wraps <code>vmbpy</code>. On connect it scans all cameras, filters for <em>Allied Vision</em> by vendor name, opens the first match, and creates <code>save_dir</code> if it doesn't exist.</p>
 
   <h3>Single frame</h3>
-<pre><code><span class="kw">from</span> capture_camera <span class="kw">import</span> <span class="cl">AVTCamera</span>
+<pre><code><span class="kw">from</span> avt_camera <span class="kw">import</span> <span class="cl">AVTCamera</span>
 
 <span class="kw">with</span> <span class="cl">AVTCamera</span>(exposure_us=<span class="num">10000</span>, gain_db=<span class="num">0.0</span>, save_dir=<span class="str">"captures"</span>) <span class="kw">as</span> cam:
     image = cam.<span class="fn">capture</span>()          <span class="cm"># raw uint8 or uint16, shape (H, W)</span>
@@ -389,7 +389,7 @@ maxamp = np.<span class="fn">max</span>(md_image,   axis=<span class="num">2</sp
   <p>Connects both devices, homes the stage, sweeps in 5 µm steps, and saves a timestamped <code>.npy</code> stack with 8-bit preview PNGs.</p>
 
 <pre><code><span class="kw">from</span> stage <span class="kw">import</span> <span class="cl">ThorlabsStage</span>
-<span class="kw">from</span> capture_camera <span class="kw">import</span> <span class="cl">AVTCamera</span>
+<span class="kw">from</span> avt_camera <span class="kw">import</span> <span class="cl">AVTCamera</span>
 
 stage = <span class="cl">ThorlabsStage</span>(units=<span class="str">"mm"</span>)
 stage.<span class="fn">connect</span>()

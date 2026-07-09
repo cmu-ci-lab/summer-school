@@ -85,7 +85,7 @@ class Camera:
 
     def _make(self, vendor: str):
         if vendor == "avt":
-            from capture_camera import AVTCamera
+            from avt_camera import AVTCamera
             return AVTCamera(**self._kwargs, ip=self._ip)
         if vendor == "ids":
             from ids_camera import IDSCamera
@@ -125,7 +125,7 @@ class Camera:
         """Scan for all supported cameras and print a summary."""
         print("=== Scanning for Allied Vision cameras (vmbpy) ===")
         try:
-            from capture_camera import AVTCamera
+            from avt_camera import AVTCamera
             AVTCamera.scan()
         except ImportError:
             print("  vmbpy not installed — skipping AVT scan.")

@@ -604,7 +604,7 @@ class AVTCamera:
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
     import sys
-    ip_arg = sys.argv[1] if len(sys.argv) > 1 else None  # optional: python capture_camera.py 192.168.1.100
+    ip_arg = sys.argv[1] if len(sys.argv) > 1 else None  # optional: python avt_camera.py 192.168.1.100
     with AVTCamera(exposure_us=10000, gain_db=0.0, save_dir="captures", ip=ip_arg) as cam:
         image = cam.capture()
         print(f"Shape: {image.shape}  dtype: {image.dtype}")

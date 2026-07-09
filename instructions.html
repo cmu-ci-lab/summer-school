@@ -382,7 +382,8 @@
       <span class="part-tag">Part 2</span>
       <h2>Alignment</h2>
     </div>
-    <p class="part-note">Everything in this part runs from the Python scripts in this repository, inside the
+    <p class="part-note">Everything in this part runs from the Python scripts in
+    <a href="https://github.com/cmu-ci-lab/summer-school">this repository</a>, inside the
     conda environment from <code>environment.yml</code>.</p>
 
     <section class="step" id="a0">
@@ -391,11 +392,19 @@
       Plug in the KDC101's USB cable, switch it on with the red switch, connect the camera's USB cable,
       then run:</p>
 <pre><code><span class="cm"># one-time setup (see Software installations below for details)</span>
+git clone https://github.com/cmu-ci-lab/summer-school.git
+cd summer-school
 ./setup.sh
-conda activate iccp-oct          <span class="cm"># or: source .venv/bin/activate</span>
-
-<span class="cm"># verify stage + camera connectivity</span>
-python test_hardware.py</code></pre>
+<span class="cm"># or, with conda directly instead of setup.sh:</span>
+conda env create -f environment.yml
+conda activate iccp-oct          <span class="cm"># or: source .venv/bin/activate</span></code></pre>
+      <p>After the environment is built, install the <strong>camera SDK</strong> — this is a separate step
+      that <code>environment.yml</code> doesn't cover, and which one you need depends on the camera on your
+      rig: the Vimba&nbsp;X SDK (vmbpy wheel) for Allied Vision, or the IDS Software Suite plus
+      <code>pyueye</code> for IDS uEye. See <a href="#software">Software installations</a> below for
+      step-by-step instructions. With the environment active and the SDK in place, verify stage and camera
+      connectivity:</p>
+<pre><code>python test_hardware.py</code></pre>
       <p>Or, to skip a vendor you don't have: <code>python test_hardware.py --camera ids</code> (IDS only —
       skips the Vimba&nbsp;X check) or <code>--camera avt</code> (Allied Vision only).</p>
       <p>The stage test connects, reads the position, <strong>moves +5&nbsp;mm and back</strong>, and verifies
@@ -732,6 +741,12 @@ python oct_scan.py --start 12.0 --step-mm 0.003 --frames 300</code></pre>
       <div class="note"><strong>More detail:</strong> see the <a href="docs.html#install">software guide</a> for a
       fuller explanation of the installation, the hardware API (<code>ThorlabsStage</code> /
       <code>Camera</code>), and troubleshooting.</div>
+
+      <p><strong>Getting the code</strong> — all the scripts live in the course repository at
+      <a href="https://github.com/cmu-ci-lab/summer-school">github.com/cmu-ci-lab/summer-school</a>.
+      Clone it and run everything from inside it:</p>
+<pre><code>git clone https://github.com/cmu-ci-lab/summer-school.git
+cd summer-school</code></pre>
 
       <p><strong>Running setup.sh</strong> — the script prefers conda if you have it and falls back to a
       plain <code>.venv</code> if you don't:</p>

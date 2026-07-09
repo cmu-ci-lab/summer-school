@@ -257,6 +257,7 @@
       <li>
         <a class="top" href="#install"><span class="n">1</span>Installation</a>
         <ul>
+          <li><a href="#install-clone">Getting the code</a></li>
           <li><a href="#install-run">Running setup.sh</a></li>
           <li><a href="#install-vmbpy">Allied Vision: vmbpy</a></li>
           <li><a href="#install-ids">IDS: pyueye</a></li>
@@ -329,6 +330,11 @@
 <span class="file-tag">setup.sh · environment.yml · requirements.txt</span>
 
 <p>The rig is a <strong>Thorlabs KDC101-driven motorized stage</strong> plus a monochrome machine-vision camera — either <strong>Allied Vision</strong> (via the Vimba X SDK) or <strong>IDS uEye</strong> (via pyueye). All the software runs from one Python environment, and one script builds it on Windows (Git Bash) and macOS.</p>
+
+<h3 id="install-clone">Getting the code</h3>
+<p>Every script in this guide lives in the course repository at <a href="https://github.com/cmu-ci-lab/summer-school">github.com/cmu-ci-lab/summer-school</a>. Clone it and run everything from inside it:</p>
+<pre><code>git clone https://github.com/cmu-ci-lab/summer-school.git
+cd summer-school</code></pre>
 
 <h3 id="install-run">Running setup.sh</h3>
 <p>The script prefers conda if you have it and falls back to a plain <code>.venv</code> if you don't:</p>

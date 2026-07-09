@@ -12,7 +12,7 @@ from oct import downsample_spatial, process_stack, save_depth_outputs, save_colo
 # ── Settings (defaults; overridable via command-line args) ─────────────────────
 STACK_PATH   = Path("coin_captures_ids_3250/stack.npy")
 DOWNSAMPLE   = 1   # spatially average NxN pixel patches (1 = no downsampling)
-FRAME_STRIDE = 2   # captured frames per depth index (recorded in the sidecar)
+FRAME_STRIDE = 1   # captured frames per depth index (1 = use every frame)
 
 # Command-line overrides. parse_known_args so this stays usable when run cell-by-
 # cell (e.g. in an interactive/notebook session where extra argv may be present).
@@ -21,9 +21,16 @@ _parser.add_argument("-n", "--downsample", type=int, default=DOWNSAMPLE,
                      help=f"spatially average NxN pixel patches (default {DOWNSAMPLE}, 1 = off)")
 _parser.add_argument("-s", "--stack", type=Path, default=STACK_PATH,
                      help=f"path to the stack .npy (default {STACK_PATH})")
+_parser.add_argument("--frame-stride", type=int, default=FRAME_STRIDE,
+                     help="use every Nth captured frame — halves/quarters the "
+                          "processing time at the cost of axial sampling; the "
+                          "depth indices then count decimated frames (default "
+                          f"{FRAME_STRIDE} = use every frame). Recorded in the "
+                          "sidecar so point clouds stay correctly scaled.")
 _args, _ = _parser.parse_known_args()
 DOWNSAMPLE = _args.downsample
 STACK_PATH = _args.stack
+FRAME_STRIDE = _args.frame_stride
 
 #%%
 frames = np.load(STACK_PATH)

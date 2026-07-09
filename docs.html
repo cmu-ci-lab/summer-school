@@ -618,13 +618,13 @@ python read_stack.py --lossy -o preview.mp4     <span class="c"># smaller, compr
 python oct_process.py -s ...stack.npy -n 4     <span class="c"># 4x4 spatial downsampling first</span></code></pre>
 <p>It writes two arrays next to the stack, then renders and saves a depth-map PNG:</p>
 <ul>
-  <li><code>*_depth.npy</code> — per-pixel depth as a <em>frame index</em> — convert to mm by multiplying by the step size × the frame stride (2; see the every-second-frame note below);</li>
+  <li><code>*_depth.npy</code> — per-pixel depth as a <em>frame index</em> — convert to mm by multiplying by the step size (× the frame stride, if you used <code>--frame-stride</code>; the value is recorded in the <code>*_depth.json</code> sidecar);</li>
   <li><code>*_maxamp.npy</code> — the coherence function's peak amplitude per pixel, a confidence map: where it's near the noise floor, the depth value is meaningless.</li>
 </ul>
 <p>Practical knobs:</p>
 <ul>
   <li><strong><code>-n / --downsample</code></strong> averages N×N pixel patches before the computation. It's the first thing to reach for if the full-resolution run is slow or runs out of memory — and the averaging suppresses noise, too. Outputs are tagged (<code>_ds4_depth.npy</code>) so runs don't overwrite each other.</li>
-  <li>The script feeds <strong>every second frame</strong> (<code>frames[:, :, ::2]</code>) into the computation to halve the work — so one depth index equals <em>two</em> stage steps when you convert to mm.</li>
+  <li><strong><code>--frame-stride N</code></strong> feeds only every Nth frame into the computation — another speed knob (stride 2 halves the work). The depth indices then count decimated frames, so one index = N stage steps; the stride is recorded in the sidecar so <code>depth_to_pointcloud.py</code> scales z correctly either way. Default 1: every frame is used.</li>
   <li>It's also cell-structured (<code>#%%</code>), so in the Interactive Window you can recompute the plot without reloading the stack.</li>
 </ul>
 

@@ -142,6 +142,8 @@
     border: 1px solid color-mix(in srgb, var(--green) 45%, transparent);
     border-radius: 999px; padding: 0 8px; margin-right: 6px; vertical-align: 1px;
   }
+  .vidgrid { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0; }
+  .vidgrid figure { flex: 0 1 260px; min-width: 0; margin: 0; }
   .figgrid { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
   .figgrid img, figure > img {
     border-radius: 10px; border: 1px solid var(--line);
@@ -491,7 +493,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
           live image and the stage keys.</div>
         </li>
         <li>Adjust your camera to be roughly upright by rotating it about the rotation mount with graduations.
-          <figure><img src="instructions_media/p12_y0102_0.jpg" alt="Rotating the camera on its graduated mount" width="380"></figure>
+          <figure>
+            <video src="instructions_media/hw_rotate_camera.mp4" controls muted loop playsinline preload="metadata" width="300"></video>
+            <figcaption><span class="vid-badge">video</span>Rotating the camera about the graduated rotation
+            mount until the image is upright.</figcaption>
+          </figure>
         </li>
         <li>Switch on the LED (careful — it can be very bright; avoid looking directly into it), and try to
         coarsely align the orientation of the mirrors to get maximum light
@@ -561,7 +567,18 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
           <div class="note"><strong>Note:</strong> if you have the SM1NR1 telescoping tube, the LED should
           <em>not</em> rotate as you adjust it — only the tube extends. Some of the lens tubes (SM1U) do
           rotate as you turn them, so don't be alarmed if the LED spins with the adjustment on those.</div>
-          <figure><img src="instructions_media/p13_y0324_1.jpg" alt="Adjusting the telescoping tube" width="380"></figure>
+          <div class="vidgrid">
+            <figure>
+              <video src="instructions_media/hw_rotate_sm1nr1.mp4" controls muted loop playsinline preload="metadata"></video>
+              <figcaption><span class="vid-badge">video</span><strong>SM1NR1</strong> — the tube extends
+              without rotating the LED.</figcaption>
+            </figure>
+            <figure>
+              <video src="instructions_media/hw_rotate_sm1u.mp4" controls muted loop playsinline preload="metadata"></video>
+              <figcaption><span class="vid-badge">video</span><strong>SM1U</strong> — the LED rotates with
+              the adjustment.</figcaption>
+            </figure>
+          </div>
           <figure>
             <video src="instructions_media/viz_focusing_unaligned.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
             <figcaption><span class="vid-badge">video</span>Collimating: the two images of the LED's active

@@ -702,8 +702,12 @@ def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
     cy = STATUS_H // 2
 
     # "gamma" spelled out: Ageo has no Greek glyphs, so a γ would drop out.
+    # Two lines on the left: the values, and how to change them (the exposure
+    # hint lives here, next to the number it adjusts).
     cam_s = f"{int(exposure_us)} µs    gamma {gamma:g}    {fps:0.1f} fps    bin {binning}×"
-    txt.put((20, cy), cam_s, 16, TEXT_1, "demi", anchor="lm")
+    txt.put((20, cy - 9), cam_s, 16, TEXT_1, "demi", anchor="lm")
+    txt.put((20, cy + 13), "press  −  to dim   /   +  to brighten  (exposure)",
+            12, TEXT_MUTED, "medium", anchor="lm")
 
     if stage_ok:
         pos_s = f"{pos_mm:.4f} mm" if pos_mm is not None else "—"

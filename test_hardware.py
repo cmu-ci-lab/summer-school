@@ -64,7 +64,7 @@ def check_vmbpy():
         if wheel:
             lines += ["Good news: the Vimba X SDK is installed and its wheel was found.",
                       "Install it into THIS Python and re-run:",
-                      f'    ./python -m pip install "{wheel}"']
+                      f'    pip install "{wheel}"']
         else:
             lines += [f"Vimba X not found. Download it from:\n    {VIMBA_URL}"]
             if sys.platform == "darwin":
@@ -77,7 +77,7 @@ def check_vmbpy():
             elif sys.platform.startswith("win"):
                 lines += ["Windows installer: VimbaX_Setup-2026-1-Win64.exe",
                           "Wheel: C:\\Program Files\\Allied Vision\\Vimba X\\api\\python\\vmbpy-*.whl"]
-            lines += ["Then: ./python -m pip install <path-to-vmbpy-*.whl>"]
+            lines += ["Then: pip install <path-to-vmbpy-*.whl>"]
         lines += ["(If you are using an IDS camera, re-run with: --camera ids)"]
         hint = "\n".join(lines)
         print("⚠ " + hint.replace("\n", "\n  "))

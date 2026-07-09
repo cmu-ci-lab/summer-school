@@ -1,6 +1,11 @@
+"""Re-render an existing OCT depth map with adjustable color limits.
+
+Rendering lives in oct.save_colormap; this script only picks the file and the
+vmin/vmax window.
+"""
 import numpy as np
-import matplotlib.pyplot as plt
 from pathlib import Path
+from oct import save_colormap
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 DEPTH_PATH = Path("coin_captures_ids_new_test/stack_20260626_155621_depth.npy")
@@ -20,17 +25,8 @@ vmax = DEPTH_MAX if DEPTH_MAX is not None else depth.max()
 print(f"Colormap clim: {vmin} – {vmax}")
 
 #%%
-fig, ax = plt.subplots(figsize=(8, 6))
-im = ax.imshow(depth, cmap=CMAP, vmin=vmin, vmax=vmax)
-cbar = plt.colorbar(im, ax=ax)
-cbar.set_label("Depth (frame index)")
-ax.set_title("Depth map")
-ax.axis("off")
-plt.tight_layout()
-
-out = DEPTH_PATH.with_name(DEPTH_PATH.stem + "_render.png")
-fig.savefig(out, dpi=150, bbox_inches="tight")
-print(f"Saved: {out}")
-plt.show()
+save_colormap(depth, DEPTH_PATH.with_name(DEPTH_PATH.stem + "_render.png"),
+              cmap=CMAP, vmin=vmin, vmax=vmax, title="Depth map",
+              colorbar_label="Depth (frame index)", show=True)
 
 # %%

@@ -11,10 +11,11 @@ Geometry:
     sensor info. A capture downsampled by N (oct_process --downsample, the _dsN
     file tag) multiplies the pitch by N.
   * Axial (z): depth indices are frame numbers; z = index * frame_stride *
-    step_mm. step_mm comes from --step-mm or the _meta.json. frame_stride
-    defaults to 2 because oct_process.py feeds every other frame
-    (frames[:, :, ::2]) into compute_mean_diff. Higher index = farther from
-    the camera; pass --invert-z to flip z into a "height" instead.
+    step_mm. step_mm comes from --step-mm or the _meta.json. frame_stride and
+    downsample come from the depth map's own .json sidecar (written by
+    oct.save_depth_outputs); legacy maps without one assume stride 2
+    (oct_process's every-other-frame) with a warning. Higher index = farther
+    from the camera; pass --invert-z to flip z into a "height" instead.
 
 The sibling *_maxamp.npy (saved by oct_process.py) is used, when present, as a
 per-point intensity, and --amp-percentile drops the lowest-amplitude points —
@@ -29,12 +30,13 @@ Usage:
 import argparse
 import json
 import re
-import struct
 import numpy as np
 from pathlib import Path
 
-# oct_process.py computes on frames[:, :, ::2], so one depth index = 2 captured
-# frames = 2 stage steps.
+# Fallback when the depth map has no .json sidecar (pre-sidecar outputs):
+# oct_process.py computed on frames[:, :, ::2], so one depth index = 2 captured
+# frames = 2 stage steps. New oct.py/oct_process.py outputs record the actual
+# stride in <depth>.json and never hit this constant.
 DEFAULT_FRAME_STRIDE = 2
 
 
@@ -98,10 +100,11 @@ def main():
     parser.add_argument("--step-mm", type=float, default=None,
                         help="stage step per captured frame in mm. "
                              "Default: _meta.json.")
-    parser.add_argument("--frame-stride", type=int, default=DEFAULT_FRAME_STRIDE,
-                        help="captured frames per depth index (default "
-                             f"{DEFAULT_FRAME_STRIDE}: oct_process uses every "
-                             "other frame)")
+    parser.add_argument("--frame-stride", type=int, default=None,
+                        help="captured frames per depth index. Default: the "
+                             "depth map's .json sidecar; legacy maps without "
+                             f"one assume {DEFAULT_FRAME_STRIDE} (oct_process "
+                             "used every other frame).")
     parser.add_argument("--downsample", type=int, default=None,
                         help="lateral downsample factor of the depth map. "
                              "Default: parsed from the _dsN file tag, else 1.")
@@ -130,6 +133,15 @@ def main():
         print(f"No metadata found ({meta_path.name} missing) — using "
               "args/defaults.")
 
+    # Depth-map sidecar (written by oct.save_depth_outputs): records the
+    # frame_stride/downsample actually applied, so we don't have to guess
+    # them from constants or filename tags.
+    sidecar = {}
+    sidecar_path = args.depth.with_suffix(".json")
+    if sidecar_path.exists():
+        sidecar = json.loads(sidecar_path.read_text())
+        print(f"Depth sidecar: {sidecar_path.name}")
+
     # ── Axial scale ──
     step_mm = args.step_mm
     if step_mm is None and meta:
@@ -137,8 +149,16 @@ def main():
     if step_mm is None:
         raise SystemExit("Stage step unknown: pass --step-mm (oct_scan.py "
                          "used 0.001) or re-capture so _meta.json exists.")
-    dz_mm = step_mm * args.frame_stride
-    print(f"Axial: {step_mm:g} mm/frame x stride {args.frame_stride} "
+    frame_stride = args.frame_stride
+    if frame_stride is None:
+        frame_stride = sidecar.get("frame_stride")
+    if frame_stride is None:
+        frame_stride = DEFAULT_FRAME_STRIDE
+        print(f"WARNING: no sidecar records the frame stride — assuming "
+              f"{DEFAULT_FRAME_STRIDE} (oct_process's every-other-frame). "
+              "Pass --frame-stride if this map was computed differently.")
+    dz_mm = step_mm * frame_stride
+    print(f"Axial: {step_mm:g} mm/frame x stride {frame_stride} "
           f"= {dz_mm:g} mm per depth index")
 
     # ── Lateral scale ──
@@ -156,6 +176,8 @@ def main():
                          "in um; 1:1 magnification).")
     ds = args.downsample
     if ds is None:
+        ds = sidecar.get("downsample")
+    if ds is None:   # legacy maps: fall back to the _dsN filename tag
         m = re.search(r"_ds(\d+)_depth$", args.depth.stem)
         ds = int(m.group(1)) if m else 1
     dxy_mm = pixel_um * 1e-3 * ds
@@ -164,8 +186,11 @@ def main():
 
     # ── Optional reliability mask from the amplitude map ──
     amp = None
-    amp_path = args.depth.with_name(args.depth.stem.replace("_depth", "_maxamp")
-                                    + ".npy")
+    if sidecar.get("maxamp"):
+        amp_path = args.depth.with_name(sidecar["maxamp"])
+    else:   # legacy maps: derive the sibling name from the depth filename
+        amp_path = args.depth.with_name(
+            args.depth.stem.replace("_depth", "_maxamp") + ".npy")
     if amp_path.exists():
         amp = np.load(amp_path)
         print(f"Amplitude map: {amp_path.name}")

@@ -108,10 +108,12 @@ class Camera:
     # ------------------------------------------------------------------
 
     def __getattr__(self, name: str):
-        # Only called when normal attribute lookup fails (i.e. _cam is set)
+        # Only called when normal attribute lookup fails (i.e. _cam is set).
+        # AttributeError (not RuntimeError) so getattr(cam, name, default) and
+        # hasattr() probes on an unconnected wrapper fall back instead of raising.
         cam = object.__getattribute__(self, "_cam")
         if cam is None:
-            raise RuntimeError(
+            raise AttributeError(
                 f"Camera not connected. Call connect() before accessing {name!r}."
             )
         return getattr(cam, name)

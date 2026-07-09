@@ -111,6 +111,7 @@ class Text:
         self.ok = False
         self.queue = []
         self.cache = {}
+        self._masks = {}   # (string, size, weight) -> (alpha mask, ascent)
         # Coordinates given to put() are relative to this origin — set it to a
         # sub-surface's top-left (panel, status bar) before queueing its text,
         # since everything is flushed once on the composed canvas.
@@ -203,9 +204,12 @@ class Text:
         return self.cache[key]
 
     def put(self, xy, s, size=13, color=TEXT_2, weight="regular", anchor="la"):
-        """Queue a string; `anchor` is a PIL text anchor (la, ra, ma, ...)."""
-        xy = (xy[0] + self.origin[0], xy[1] + self.origin[1])
-        self.queue.append((xy, s, size, color, weight, anchor))
+        """Queue a string; `anchor` is a PIL text anchor (la, ra, ma, ...).
+
+        Coordinates stay origin-relative; flush() groups by origin and only
+        round-trips those sub-surfaces through PIL.
+        """
+        self.queue.append((self.origin, xy, s, size, color, weight, anchor))
 
     def width(self, s, size, weight="regular"):
         """Rendered width of `s` in pixels (estimate under the cv2 fallback)."""
@@ -213,12 +217,41 @@ class Text:
             return len(s) * size * 0.55
         return self._font(size, weight).getlength(s)
 
+    def _mask(self, s, size, weight):
+        """Rasterize `s` ONCE into a cached grayscale alpha mask.
+
+        PIL text rendering costs >1 ms per string on this Pillow build, which
+        at ~20 strings/frame would eat the whole 33 ms frame budget. Labels
+        and most values repeat frame-to-frame, so each unique string is
+        rendered to a small (H, W) alpha sprite once and numpy-blended into
+        the canvas per frame (~µs each). Returns (mask float32 0..1, ascent).
+        """
+        key = (s, size, weight)
+        hit = self._masks.get(key)
+        if hit is not None:
+            return hit
+        font = self._font(size, weight)
+        ascent, descent = font.getmetrics()
+        w = max(int(font.getlength(s)) + 2, 1)
+        img = self.Image.new("L", (w, ascent + descent + 2), 0)
+        self.ImageDraw.Draw(img).text((0, 0), s, font=font, fill=255)
+        mask = np.asarray(img, dtype=np.float32) / 255.0
+        if len(self._masks) > 2048:      # bound the cache (fast-changing values)
+            self._masks.clear()
+        self._masks[key] = (mask, ascent)
+        return self._masks[key]
+
     def flush(self, canvas):
-        """Draw all queued strings onto the BGR canvas; returns the canvas."""
+        """Blend all queued strings onto the BGR canvas; returns the canvas.
+
+        Each string is a cached alpha sprite blitted onto its small canvas
+        region — no full-canvas or region-wide PIL round trips.
+        """
         if not self.queue:
             return canvas
         if not self.ok:                      # Hershey fallback
-            for (x, y), s, size, color, weight, anchor in self.queue:
+            for (ox, oy), (x, y), s, size, color, weight, anchor in self.queue:
+                x, y = x + ox, y + oy
                 if anchor.startswith("r"):
                     x -= int(len(s) * size * 0.55)
                 elif anchor.startswith("m"):
@@ -228,13 +261,32 @@ class Text:
                             cv2.LINE_AA)
             self.queue.clear()
             return canvas
-        img = self.Image.fromarray(canvas[:, :, ::-1])   # BGR -> RGB
-        draw = self.ImageDraw.Draw(img)
-        for xy, s, size, color, weight, anchor in self.queue:
-            draw.text(xy, s, font=self._font(size, weight),
-                      fill=color[::-1], anchor=anchor)     # BGR -> RGB
+        ch, cw = canvas.shape[:2]
+        for (ox, oy), (x, y), s, size, color, weight, anchor in self.queue:
+            mask, ascent = self._mask(s, size, weight)
+            mh, mw = mask.shape
+            x, y = x + ox, y + oy
+            # PIL-style anchors: 1st char l/m/r horizontal, 2nd a/m/s vertical.
+            if anchor[0] == "m":
+                x -= mw / 2
+            elif anchor[0] == "r":
+                x -= mw
+            if anchor[1] == "m":
+                y -= mh / 2
+            elif anchor[1] == "s":
+                y -= ascent
+            x, y = int(x), int(y)
+            # Clip the sprite to the canvas.
+            sx0, sy0 = max(-x, 0), max(-y, 0)
+            sx1, sy1 = min(mw, cw - x), min(mh, ch - y)
+            if sx1 <= sx0 or sy1 <= sy0:
+                continue
+            a = mask[sy0:sy1, sx0:sx1, None]
+            region = canvas[y + sy0:y + sy1, x + sx0:x + sx1]
+            region[:] = (region * (1.0 - a)
+                         + np.asarray(color, np.float32) * a).astype(np.uint8)
         self.queue.clear()
-        return np.asarray(img)[:, :, ::-1].copy()          # RGB -> BGR
+        return canvas
 
 
 def to_display_8bit(frame, gamma):
@@ -357,9 +409,17 @@ class PatchAmplitude:
     def __init__(self, window_mm, max_frames=400):
         self.window_mm = window_mm
         self.buf = deque(maxlen=max_frames)   # (position_mm, patch) pairs
+        # Running sum over ALL buffered patches, maintained incrementally
+        # (add on append, subtract on eviction). When every buffered position
+        # is inside the window — the common case: stage parked, or a sweep
+        # narrower than the window — the DC mean is this sum / len(buf),
+        # O(patch) per frame instead of restacking up to 400 patches (which
+        # for a large patch is tens of MB of allocation per frame at 30 fps).
+        self._sum = None
 
     def reset(self):
         self.buf.clear()
+        self._sum = None
 
     def update(self, patch, pos):
         """Add a (pos, patch) sample; return the amplitude at `pos`, or None.
@@ -367,17 +427,33 @@ class PatchAmplitude:
         `pos` may be any monotone-ish coordinate — stage mm normally, or a
         frame index (with window_mm reinterpreted in frames) when no stage.
         """
-        patch = patch.astype(np.float64)
+        # float32: half the memory of float64 and ample precision for a mean
+        # of <=12-bit camera data over a <=400-deep buffer.
+        patch = patch.astype(np.float32)
         # A patch-size change (new selection) invalidates the buffer.
         if self.buf and self.buf[0][1].shape != patch.shape:
-            self.buf.clear()
+            self.reset()
+        if len(self.buf) == self.buf.maxlen:            # about to evict oldest
+            self._sum -= self.buf[0][1]
         self.buf.append((pos, patch))
+        if self._sum is None:
+            self._sum = np.zeros_like(patch, dtype=np.float64)
+        self._sum += patch
 
-        # DC estimate: mean of the patches whose position falls in the window.
-        near = [p for (q, p) in self.buf if abs(q - pos) <= self.window_mm]
-        if len(near) < 2:
+        if len(self.buf) < 2:
             return None
-        avg = np.mean(near, axis=0)
+        # DC estimate: mean of the patches whose position falls in the window.
+        # Positions are scanned cheaply (floats only); the patch arrays are
+        # only restacked when part of the buffer falls outside the window.
+        in_win = [abs(q - pos) <= self.window_mm for (q, _) in self.buf]
+        n_in = sum(in_win)
+        if n_in < 2:
+            return None
+        if n_in == len(self.buf):
+            avg = self._sum / n_in                       # fast path, O(patch)
+        else:
+            avg = np.mean([p for (ok, (_, p)) in zip(in_win, self.buf) if ok],
+                          axis=0)
         return float(np.mean(np.abs(patch - avg)))
 
 
@@ -450,11 +526,14 @@ def _tile(panel, txt, x, y, w, h, label, value, unit, color=TEXT_1):
 
 
 def render_panel(txt, points, height, live_val=None, current_pos=None,
-                 view=None, has_stage=True):
+                 view=None, has_stage=True, cache=None, version=None):
     """Render the right-hand panel: header, stat tiles, and the plot.
 
     `points` is a sequence of (position, amplitude), one value per position.
     `view` is an optional (xmin, xmax) zoom range; None = auto-fit all data.
+    `cache`/`version`: samples change far less often than frames render, so
+    the caller passes a dict and a counter it bumps on every samples mutation;
+    the sorted arrays + FWHM are recomputed only when the counter moved.
     Returns (panel, (xmin, xmax)) — the x-range actually drawn, so mouse events
     on the panel can be mapped back to data coordinates for zoom/pan.
     Geometry (grid, curve, markers) is cv2 with LINE_AA; all text is queued on
@@ -469,13 +548,18 @@ def render_panel(txt, points, height, live_val=None, current_pos=None,
             11, TEXT_MUTED)
 
     # ── FWHM / peak (computed on ALL data, independent of zoom) ──
-    fwhm = None
-    px = py = None
-    if len(points) >= 2:
-        pts = np.asarray(points, dtype=np.float64)
-        order = np.argsort(pts[:, 0])
-        px, py = pts[order, 0], pts[order, 1]
-        fwhm = compute_fwhm(px, py)
+    if cache is None:
+        cache = {}
+    if cache.get("version") != version or version is None:
+        if len(points) >= 2:
+            pts = np.asarray(points, dtype=np.float64)
+            order = np.argsort(pts[:, 0])
+            px, py = pts[order, 0], pts[order, 1]
+            cache.update(version=version, px=px, py=py,
+                         fwhm=compute_fwhm(px, py))
+        else:
+            cache.update(version=version, px=None, py=None, fwhm=None)
+    px, py, fwhm = cache["px"], cache["py"], cache["fwhm"]
 
     # ── Stat tiles ──
     ty = HEADER_H
@@ -541,14 +625,25 @@ def render_panel(txt, points, height, live_val=None, current_pos=None,
         if top <= fl <= bot:
             _dashed_line(panel, (PB_X0, fl), (PB_X1, fl), GRID, 6, 5)
 
-    # Curve: 2px antialiased polyline through the visible points.
-    pts_px = [to_px(px[i], py[i]) for i in range(len(px))]
-    seg = [p for p in pts_px if PB_X0 <= p[0] <= PB_X1]
+    # Curve: 2px antialiased polyline through the visible points, mapped to
+    # pixels with one vectorized affine transform (px is already sorted).
+    seg = np.empty((int(vis.sum()), 2), np.int32)
+    seg[:, 0] = PB_X0 + (px[vis] - xmin) / (xmax - xmin) * (PB_X1 - PB_X0)
+    seg[:, 1] = bot - (py[vis] - ymin) / (ymax - ymin) * (bot - top)
+    # More samples than pixel columns is invisible but expensive to stroke —
+    # collapse to one (column, mean y) vertex per column before drawing.
+    if len(seg) > (PB_X1 - PB_X0):
+        cols = seg[:, 0] - PB_X0
+        counts = np.bincount(cols)
+        ysum = np.bincount(cols, weights=seg[:, 1])
+        keep = counts > 0
+        seg = np.column_stack([np.nonzero(keep)[0] + PB_X0,
+                               (ysum[keep] / counts[keep])]).astype(np.int32)
     if len(seg) >= 2:
-        cv2.polylines(panel, [np.asarray(seg, np.int32)], False, SERIES, 2,
-                      cv2.LINE_AA)
-    for p in seg:
-        cv2.circle(panel, p, 2, SERIES, -1, cv2.LINE_AA)
+        cv2.polylines(panel, [seg], False, SERIES, 2, cv2.LINE_AA)
+    if len(seg) <= 300:   # dots add nothing on a dense curve
+        for p in seg:
+            cv2.circle(panel, tuple(p), 2, SERIES, -1, cv2.LINE_AA)
 
     # FWHM annotation: half-max segment with end ticks, dashed peak vertical.
     if fwhm is not None:
@@ -697,6 +792,10 @@ def main():
     # One value per position: keyed by position rounded to 0.1 µm, so sitting
     # at (or revisiting) a position overwrites its value instead of adding points.
     samples = {}                         # pos_key -> (position mm, amplitude)
+    # Bumped on every samples mutation; render_panel caches the sorted
+    # arrays + FWHM against it so they aren't recomputed every frame.
+    samples_version = 0
+    panel_cache = {}
     # plot_view["range"]: (xmin, xmax) zoom of the plot, None = auto-fit.
     # plot_view["drawn"]: the range actually rendered last frame (needed to map
     # panel pixels back to data coordinates for wheel-zoom / drag-pan).
@@ -713,6 +812,7 @@ def main():
         return xmin + t * (xmax - xmin)
 
     def on_mouse(event, x, y, flags, param):
+        nonlocal samples_version
         s = disp_state["scale"]
         if s <= 0:
             return
@@ -755,6 +855,7 @@ def main():
             if rect is not None:
                 amp.reset()
                 samples.clear()
+                samples_version += 1
                 x0, y0, x1, y1 = rect
                 print(f"Patch selected: x[{x0}:{x1}] y[{y0}:{y1}] "
                       f"({x1 - x0}x{y1 - y0} px)")
@@ -825,7 +926,17 @@ def main():
                 x0, x1 = np.clip((x0, x1), 0, fw)
                 y0, y1 = np.clip((y0, y1), 0, fh)
                 if x1 - x0 >= 2 and y1 - y0 >= 2:
-                    # x-coordinate: stage position if available, else frame index
+                    # x-coordinate: stage position if available, else frame index.
+                    # While the stage is in motion the 10 Hz cached position is
+                    # up to 100 ms stale (directionally biased against the
+                    # sweep), so re-poll it for the frame being attributed.
+                    if stage is not None and moving:
+                        try:
+                            pos_mm = stage.position
+                            moving = stage.is_moving
+                            last_pos_t = now
+                        except Exception:
+                            pass
                     if stage is not None and pos_mm is not None:
                         coord = pos_mm
                     else:
@@ -838,6 +949,7 @@ def main():
                         key = round(coord, 4)
                         if key in samples or len(samples) < MAX_POINTS:
                             samples[key] = (coord, live_val)
+                            samples_version += 1
                         last_coord = coord
 
             # Scale down to fit the screen while preserving aspect ratio
@@ -880,7 +992,9 @@ def main():
                                         frame_rgb.shape[0], live_val,
                                         current_pos=last_coord,
                                         view=plot_view["range"],
-                                        has_stage=stage is not None)
+                                        has_stage=stage is not None,
+                                        cache=panel_cache,
+                                        version=samples_version)
             plot_view["drawn"] = drawn
             canvas = np.hstack([frame_rgb, panel])
             txt.origin = (0, frame_rgb.shape[0])
@@ -914,6 +1028,7 @@ def main():
                     selector.clear()
                     amp.reset()
                     samples.clear()
+                    samples_version += 1
                     last_coord = None
                     fallback_idx = 0
                     live_val = None
@@ -921,6 +1036,7 @@ def main():
                     print("Patch selection cleared.")
                 elif k == ord('r'):
                     samples.clear()
+                    samples_version += 1
                     last_coord = None
                     fallback_idx = 0
                     plot_view["range"] = None

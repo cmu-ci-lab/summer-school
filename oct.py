@@ -90,18 +90,89 @@ def compute_mean_diff(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# I/O helpers
+# Shared pipeline helpers (used by the CLI below, oct_process.py and oct_view.py)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _save_colormap(array: np.ndarray, path: Path, cmap: str = "viridis", title: str = ""):
-    fig, ax = plt.subplots()
-    im = ax.imshow(array, cmap=cmap)
-    plt.colorbar(im, ax=ax)
+def downsample_spatial(arr: np.ndarray, n: int) -> np.ndarray:
+    """Average non-overlapping NxN patches over the first two (spatial) axes.
+
+    arr is (H, W, ...) — extra trailing axes (e.g. frames) are preserved. The
+    height/width are cropped to a multiple of n before reshaping into blocks.
+    """
+    if n <= 1:
+        return arr
+    h, w = arr.shape[:2]
+    h2, w2 = (h // n) * n, (w // n) * n
+    arr = arr[:h2, :w2]
+    blocks = arr.reshape((h2 // n, n, w2 // n, n) + arr.shape[2:])
+    return blocks.mean(axis=(1, 3))
+
+
+def process_stack(frames: np.ndarray, frame_stride: int = 2, patch_size: int = 5,
+                  avg_type: str = "local", temporal_window: int = 20,
+                  ) -> tuple[np.ndarray, np.ndarray]:
+    """Stack → (depth, maxamp). One place owns the decimation + argmax recipe.
+
+    frame_stride decimates the stack (frames[:, :, ::stride]) before
+    compute_mean_diff, so a depth index spans `frame_stride` captured frames.
+    """
+    if frame_stride > 1:
+        frames = frames[:, :, ::frame_stride]
+    _, md_image, _ = compute_mean_diff(frames, patch_size=patch_size,
+                                       avg_type=avg_type,
+                                       temporal_window=temporal_window)
+    depth  = np.argmax(md_image, axis=2)   # (H, W)  0-indexed decimated frame no.
+    maxamp = np.max(md_image, axis=2)      # (H, W)
+    return depth, maxamp
+
+
+def save_depth_outputs(depth: np.ndarray, maxamp: np.ndarray, stack_path: Path,
+                       frame_stride: int, downsample: int = 1,
+                       params: dict = None) -> Path:
+    """Save <stem>[_dsN]_depth.npy, _maxamp.npy and a _depth.json sidecar.
+
+    The sidecar records the geometry consumers need (frame_stride, downsample,
+    source stack, maxamp filename) so tools like depth_to_pointcloud.py read it
+    instead of re-deriving scan facts from filenames or hardcoded constants.
+    Returns the depth .npy path.
+    """
+    import json
+    stem = stack_path.stem + (f"_ds{downsample}" if downsample > 1 else "")
+    depth_path  = stack_path.with_name(f"{stem}_depth.npy")
+    maxamp_path = stack_path.with_name(f"{stem}_maxamp.npy")
+    np.save(depth_path, depth)
+    np.save(maxamp_path, maxamp)
+    sidecar = {
+        "source_stack": stack_path.name,
+        "frame_stride": frame_stride,   # captured frames per depth index
+        "downsample": downsample,       # lateral pixels per depth-map pixel
+        "maxamp": maxamp_path.name,
+        **(params or {}),
+    }
+    sidecar_path = depth_path.with_suffix(".json")
+    sidecar_path.write_text(json.dumps(sidecar, indent=2))
+    print(f"Saved: {depth_path.name}  {maxamp_path.name}  {sidecar_path.name}")
+    return depth_path
+
+
+def save_colormap(array: np.ndarray, path: Path, cmap: str = "viridis",
+                  title: str = "", vmin=None, vmax=None, colorbar_label: str = "",
+                  show: bool = False):
+    """Render an array as a colormapped figure and save it (optionally show)."""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    im = ax.imshow(array, cmap=cmap, vmin=vmin, vmax=vmax)
+    cbar = plt.colorbar(im, ax=ax)
+    if colorbar_label:
+        cbar.set_label(colorbar_label)
     if title:
         ax.set_title(title)
     ax.axis("off")
     fig.savefig(path, bbox_inches="tight", dpi=150)
-    plt.close(fig)
+    print(f"Saved: {path}")
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -117,37 +188,37 @@ if __name__ == "__main__":
     parser.add_argument("--avg-type",      type=str,   default="local",  help="'local' or 'global' (default local).")
     parser.add_argument("--temporal-window", type=int, default=20,      help="Temporal window for local averaging (default 20).")
     parser.add_argument("--every-other",   action="store_true",         help="Use only every other frame (frames[:,:,::2]).")
+    parser.add_argument("-n", "--downsample", type=int, default=1,
+                        help="spatially average NxN pixel patches first (default 1 = off)")
     args = parser.parse_args()
 
     stack_path = Path(args.stack)
-    out_dir = stack_path.parent
-    stem = stack_path.stem
 
     print(f"Loading: {stack_path}")
     frames = np.load(stack_path)                          # (H, W, N)
     print(f"  shape={frames.shape}  dtype={frames.dtype}")
 
-    if args.every_other:
-        frames = frames[:, :, ::2]
-        print(f"  every-other frame → shape={frames.shape}")
+    if args.downsample > 1:
+        frames = downsample_spatial(frames, args.downsample)
+        print(f"  downsampled {args.downsample}x{args.downsample} → shape={frames.shape}")
 
-    print(f"Running compute_mean_diff  patch={args.patch_size}  type={args.avg_type}  window={args.temporal_window}")
-    _, md_image, _ = compute_mean_diff(
-        frames,
-        patch_size=args.patch_size,
-        avg_type=args.avg_type,
-        temporal_window=args.temporal_window,
-    )
+    frame_stride = 2 if args.every_other else 1
+    print(f"Running compute_mean_diff  patch={args.patch_size}  type={args.avg_type}  "
+          f"window={args.temporal_window}  stride={frame_stride}")
+    depth, maxamp = process_stack(frames, frame_stride=frame_stride,
+                                  patch_size=args.patch_size,
+                                  avg_type=args.avg_type,
+                                  temporal_window=args.temporal_window)
+    print(f"Depth range: {depth.min()} – {depth.max()} frames")
 
-    maxamp = np.max(md_image, axis=2)                     # (H, W)
-    depth  = np.argmax(md_image, axis=2)                  # (H, W)  0-indexed frame number
-
-    # Save raw arrays
-    np.save(out_dir / f"{stem}_depth.npy",  depth)
-    np.save(out_dir / f"{stem}_maxamp.npy", maxamp)
-    print(f"Saved: {stem}_depth.npy  {stem}_maxamp.npy")
+    depth_path = save_depth_outputs(
+        depth, maxamp, stack_path, frame_stride=frame_stride,
+        downsample=args.downsample,
+        params={"patch_size": args.patch_size, "avg_type": args.avg_type,
+                "temporal_window": args.temporal_window})
 
     # Save visualisations
-    _save_colormap(depth,  out_dir / f"{stem}_depth.png",  cmap="viridis", title="Depth map")
-    _save_colormap(maxamp, out_dir / f"{stem}_maxamp.png", cmap="inferno", title="Max amplitude")
-    print(f"Saved: {stem}_depth.png  {stem}_maxamp.png")
+    save_colormap(depth,  depth_path.with_suffix(".png"), cmap="viridis",
+                  title="Depth map", colorbar_label="Depth (frame index)")
+    save_colormap(maxamp, depth_path.with_name(depth_path.stem.replace("_depth", "_maxamp") + ".png"),
+                  cmap="inferno", title="Max amplitude")

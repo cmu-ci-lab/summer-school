@@ -540,6 +540,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         </li>
         <li>Unblock the object arm and select a <strong>patch</strong> on the live view — two clicks: the
         first anchors a corner, the second finalizes it. The coherence panel now tracks that patch.
+          <figure>
+            <video src="instructions_media/viz_select_patch.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
+            <figcaption><span class="vid-badge">video</span>Selecting a patch: one click to anchor a corner,
+            a second to finalize.</figcaption>
+          </figure>
           <div class="theory">
             <p class="theory-title">What the panel is computing</p>
             <p>The plotted value is the <code>computeMeanDiff</code> measure: within the patch, take each
@@ -552,12 +557,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
           </div>
         </li>
         <li>Step through stage positions with <kbd>w</kbd>/<kbd>s</kbd>, using a step that is neither too
-        small nor too large — around 0.01–0.02&nbsp;mm. Too small and the sweep takes forever; too large and
-        you can step clean over the peak, which is only a coherence length (tens of µm) wide. The moment the
-        pathlengths match you will see the fringes appear in the live view, and a <strong>sharp peak</strong>
-        in the panel.
+        small nor too large — around 0.3–0.5&nbsp;mm. Too small and the sweep takes forever; too large and
+        you can step clean over the region where the interference appears. The moment the pathlengths match
+        you will see the fringes appear in the live view, and a <strong>sharp peak</strong> in the panel.
           <figure>
-            <video src="instructions_media/viz_coherence.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
+            <video src="instructions_media/viz_coherence_sweep.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
             <figcaption><span class="vid-badge">video</span>Stepping the stage with a patch selected: the plot
             sits at the noise floor until the pathlengths match — then fringes appear and the amplitude spikes
             into a sharp peak.</figcaption>

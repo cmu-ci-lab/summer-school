@@ -121,6 +121,10 @@
     font-size: 13.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
     font-variant-numeric: tabular-nums;
   }
+  .step h4 {
+    font-size: 16.5px; margin: 26px 0 8px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
   .step ol.sub { margin: 8px 0 8px; padding-left: 22px; list-style: lower-alpha; }
   .step ol.sub > li { margin: 8px 0; color: var(--text); }
   .step ol.roman { list-style: lower-roman; padding-left: 22px; }
@@ -790,8 +794,7 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
       <h3>Software installations</h3>
       <p>The rig is a <strong>Thorlabs KDC101-driven motorized stage</strong> plus a monochrome
       machine-vision camera — either <strong>Allied Vision</strong> (via the Vimba&nbsp;X SDK) or
-      <strong>IDS uEye</strong> (via pyueye). All the software runs from one Python environment, and one
-      script builds it on Windows (Git&nbsp;Bash) and macOS.</p>
+      <strong>IDS uEye</strong> (via pyueye). All the software runs from one Python environment.</p>
       <div class="note"><strong>More detail:</strong> see the <a href="docs.html#install">software guide</a> for a
       fuller explanation of the installation, the hardware API (<code>ThorlabsStage</code> /
       <code>Camera</code>), and troubleshooting.</div>
@@ -802,25 +805,24 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
 <pre><code>git clone https://github.com/cmu-ci-lab/summer-school.git
 cd summer-school</code></pre>
 
-      <p><strong>Running setup.sh</strong> — the script prefers conda if you have it and falls back to a
-      plain <code>.venv</code> if you don't:</p>
+      <p><strong>Setting up the Python environment</strong> — <code>setup.sh</code> prefers conda if you
+      have it and falls back to a plain <code>.venv</code> if you don't. Run it from the Terminal on macOS,
+      or from Git&nbsp;Bash on Windows:</p>
 <pre><code>chmod +x setup.sh
 ./setup.sh
 <span class="cm"># or, to force a venv even when conda exists:</span>
 FORCE_VENV=1 ./setup.sh</code></pre>
-      <p>On Windows without Git&nbsp;Bash, run <code>setup.bat</code> from the Command Prompt instead — it
-      does the same thing (finds conda or falls back to a venv, installs the vmbpy wheel if Vimba&nbsp;X is
-      present, registers the Jupyter kernel):</p>
-<pre><code>setup.bat</code></pre>
+      <p>It creates or updates the <code>iccp-oct</code> environment from <code>environment.yml</code>
+      (Python&nbsp;3.12, numpy, scipy, matplotlib, OpenCV, pyserial, pylablib, pyftdi), installs the vmbpy
+      wheel if Vimba&nbsp;X is already present, and registers a Jupyter kernel.</p>
       <p><strong>Alternative: manual conda install</strong> — if you'd rather not run the script and already
       have conda, you can create the environment directly from <code>environment.yml</code>:</p>
 <pre><code>conda env create -f environment.yml
 conda activate iccp-oct</code></pre>
-      <p>(You'll still need to install your camera's SDK/bindings by hand — see below — and on macOS,
-      <code>conda install -c conda-forge libusb</code> plus <code>pip install pyftdi</code> for the stage.)</p>
-      <p>It creates or updates the <code>iccp-oct</code> environment from <code>environment.yml</code>
-      (Python&nbsp;3.12, numpy, scipy, matplotlib, OpenCV, pyserial, pylablib, pyftdi), registers a Jupyter
-      kernel, and prints activation instructions when it finishes:</p>
+      <p>(You'll still need to install your camera's SDK/bindings by hand — see your platform below — and on
+      macOS the stage backend: <code>conda install -c conda-forge libusb</code> plus
+      <code>pip install pyftdi</code>.)</p>
+      <p><strong>Activating</strong> the environment afterwards:</p>
 <pre><code><span class="cm"># conda path</span>
 conda activate iccp-oct
 <span class="cm"># venv path</span>
@@ -828,52 +830,52 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
       <p>In VSCode, pick the interpreter with <kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> →
       <em>Python: Select Interpreter</em> → <em>Python (iccp-oct)</em> (or <code>./.venv</code>). Some scripts
       can also be run cell-by-cell in the Interactive Window, so it's worth setting this up now.</p>
-      <p>After the environment, install the SDK for <em>your</em> camera — one of the next two applies,
-      not both.</p>
+      <p>Then set up the drivers and camera SDK for your platform — only the camera you actually have
+      applies.</p>
 
-      <p><strong>Allied Vision cameras: the vmbpy wheel</strong> — <code>vmbpy</code> is <em>not on PyPI</em>;
-      it ships as a wheel inside the Vimba&nbsp;X SDK. <code>setup.sh</code> searches the standard install
-      locations and installs the wheel automatically if it finds one; otherwise install
-      <a href="https://www.alliedvision.com/en/support/software-downloads/vimba-x-sdk/vimba-x">Vimba&nbsp;X</a>
-      first, then re-run <code>setup.sh</code> (or <code>pip install</code> the wheel directly):</p>
+      <h4>Windows</h4>
       <ul class="plain">
-        <li><strong>Windows:</strong> <code>VimbaX_Setup-2026-1-Win64.exe</code> — wheel in
-        <code>C:\Program Files\Allied Vision\Vimba X\api\python\</code></li>
-        <li><strong>macOS:</strong> <code>VimbaX_Setup-2023-4-macOS.dmg</code> — wheel in
-        <code>/Users/Shared/Allied Vision/Vimba X/Vmbpy/</code></li>
+        <li><strong>Stage:</strong> the Thorlabs Kinesis/APT driver must be installed for the KDC101.
+        <em>(Optional)</em> Thorlabs
+        <a href="https://www.thorlabs.com/software_pages/ViewSoftwarePage.cfm?Code=Motion_Control">Kinesis</a>
+        also works as a GUI fallback for debugging.</li>
+        <li><strong>Allied Vision camera:</strong> <code>vmbpy</code> is <em>not on PyPI</em> — it ships as a
+        wheel inside the
+        <a href="https://www.alliedvision.com/en/support/software-downloads/vimba-x-sdk/vimba-x">Vimba&nbsp;X</a>
+        SDK. Install <code>VimbaX_Setup-2026-1-Win64.exe</code>, then re-run <code>setup.sh</code> (it finds
+        and installs the wheel automatically), or install it yourself from
+        <code>C:\Program Files\Allied Vision\Vimba X\api\python\vmbpy-*.whl</code>.</li>
+        <li><strong>IDS camera:</strong> two pieces — the
+        <a href="https://en.ids-imaging.com/download-details/AB00615.html">IDS Software Suite 4.97 for
+        Windows 32/64-bit</a> (the native uEye SDK and driver; without it <code>pyueye</code> imports but
+        every call fails), then <code>pip install pyueye</code> into the project environment. If you're on
+        IDS hardware you can skip Vimba&nbsp;X entirely; pass <code>--camera ids</code> to the hardware test
+        so it doesn't check for vmbpy.</li>
+      </ul>
+
+      <h4>macOS</h4>
+      <ul class="plain">
+        <li><strong>Stage:</strong> no driver needed. Apple's FTDI driver ignores the KDC101's custom PID
+        (<code>0xfaf0</code>), so <em>no</em> <code>/dev/cu.usbserial-*</code> port ever appears — don't hunt
+        for one; the stage is driven directly over libusb via <code>pyftdi</code>. <code>setup.sh</code>
+        installs <code>libusb</code> (conda-forge or Homebrew) for you.</li>
+        <li><strong>Allied Vision camera:</strong> install <code>VimbaX_Setup-2023-4-macOS.dmg</code>, then
+        re-run <code>setup.sh</code> (it finds and installs the wheel automatically), or install it yourself
+        from <code>/Users/Shared/Allied Vision/Vimba X/Vmbpy/vmbpy-*.whl</code>.</li>
       </ul>
       <div class="warn"><strong>Caution (macOS):</strong> the Vimba&nbsp;X installer package may be blocked
       by macOS when you run it. If that happens, open <em>System Settings → Privacy&nbsp;&amp;&nbsp;Security</em>,
       scroll down to the message about the blocked installer, and click <em>Open&nbsp;Anyway</em> to allow it
       to run.</div>
-      <div class="note tip"><strong>Tip:</strong> install the wheel into the <em>project environment</em>
-      (activate <code>iccp-oct</code> or the venv first, then <code>pip install
-      &lt;path-to-vmbpy-*.whl&gt;</code>) — not into the system Python, or imports will fail when you run
-      from the project env.</div>
 
-      <p><strong>IDS cameras: pyueye</strong> — IDS uEye cameras need two pieces:</p>
-      <ul class="plain">
-        <li><strong>The IDS Software Suite</strong> (the uEye SDK and driver) — download
-        <a href="https://en.ids-imaging.com/download-details/AB00615.html">IDS Software Suite 4.97 for
-        Windows 32/64-bit</a>. This is the native driver the Python bindings talk to; without it,
-        <code>pyueye</code> imports but every call fails.</li>
-        <li><strong>The Python bindings:</strong> <code>pip install pyueye</code> into the project
-        environment.</li>
-      </ul>
-      <p>That's it — no wheel hunting. If you're on IDS hardware you can skip Vimba&nbsp;X entirely; pass
-      <code>--camera ids</code> to the hardware test so it doesn't check for vmbpy.</p>
-
-      <p><strong>Platform notes</strong> (already handled by <code>setup.sh</code>):</p>
-      <ul class="plain">
-        <li><strong>macOS:</strong> Apple's FTDI driver ignores the KDC101's custom PID
-        (<code>0xfaf0</code>), so <em>no</em> <code>/dev/cu.usbserial-*</code> port ever appears. Don't hunt
-        for one — the stage is driven directly over libusb via <code>pyftdi</code>. <code>setup.sh</code>
-        installs <code>libusb</code> (conda-forge or Homebrew) for you.</li>
-        <li><strong>Windows:</strong> the Thorlabs Kinesis/APT driver must be installed for the stage.
-        <em>(Optional)</em> Thorlabs
-        <a href="https://www.thorlabs.com/software_pages/ViewSoftwarePage.cfm?Code=Motion_Control">Kinesis</a>
-        also works as a GUI fallback for debugging.</li>
-      </ul>
+      <div class="note"><strong>Where's the wheel?</strong> Once you install Vimba&nbsp;X, the vmbpy wheel is
+      <em>inside</em> the installed SDK (at the paths listed above) — you don't download it separately. If
+      you can't find it, run <code>./python test_hardware.py</code>: it searches the standard install
+      locations for you and prints the wheel's path along with the exact <code>pip install</code> command.</div>
+      <div class="note tip"><strong>Tip:</strong> on either platform, install the vmbpy wheel into the
+      <em>project environment</em> (activate <code>iccp-oct</code> or the venv first, then
+      <code>pip install &lt;path-to-vmbpy-*.whl&gt;</code>) — not into the system Python, or imports will
+      fail when you run from the project env.</div>
     </section>
 
     <section class="step" id="troubleshooting">

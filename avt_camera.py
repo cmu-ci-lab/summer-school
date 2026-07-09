@@ -1,3 +1,6 @@
+import os
+import sys
+import glob
 import vmbpy
 import threading
 import numpy as np
@@ -37,8 +40,58 @@ class AVTCamera:
     # Connection
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Transport layers (GenTL)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _find_gentl_dir() -> str | None:
+        """Locate the Vimba X GenTL transport-layer (.cti) directory.
+
+        vmbpy finds transport layers via the ``GENICAM_GENTL64_PATH`` env var,
+        but other vendors' SDKs (e.g. Lucid Vision's Arena SDK) overwrite that
+        variable to point only at their own producers. When that happens Vimba
+        X's own .cti files never load and VmbStartup dies with
+        ``VmbError.NoTL`` — no Allied Vision camera is ever detected. We locate
+        Vimba X's own cti directory here and pass it explicitly via
+        set_path_configuration(), bypassing the env var entirely.
+
+        Returns the directory path, or None if no Vimba X install is found (in
+        which case we fall back to the env var).
+        """
+        candidates: list[str] = []
+        # The installer sets VIMBA_X_HOME (Windows); honour it first.
+        home = os.environ.get("VIMBA_X_HOME") or os.environ.get("VIMBAX_HOME")
+        if home:
+            candidates.append(os.path.join(home, "cti"))
+        if sys.platform.startswith("win"):
+            candidates.append(r"C:\Program Files\Allied Vision\Vimba X\cti")
+        elif sys.platform == "darwin":
+            candidates += glob.glob("/Applications/VimbaX_*/cti")
+            candidates += glob.glob("/Library/Application Support/Vimba X/cti")
+        else:  # linux
+            candidates += glob.glob("/opt/VimbaX_*/cti")
+            candidates += glob.glob("/opt/Vimba_*/cti")
+        for d in candidates:
+            if os.path.isdir(d) and glob.glob(os.path.join(d, "*.cti")):
+                return d
+        return None
+
+    @classmethod
+    def _vmb_instance(cls):
+        """VmbSystem singleton, pointed at the Vimba X cti dir when we find one.
+
+        This makes camera detection robust against a ``GENICAM_GENTL64_PATH``
+        that another vendor's SDK has hijacked — see _find_gentl_dir().
+        """
+        vmb = vmbpy.VmbSystem.get_instance()
+        cti = cls._find_gentl_dir()
+        if cti:
+            vmb.set_path_configuration(cti)
+        return vmb
+
     def connect(self):
-        self._vmb = vmbpy.VmbSystem.get_instance().__enter__()
+        self._vmb = self._vmb_instance().__enter__()
 
         try:
             raw = self._find_by_ip(self.ip) if self.ip else self._find_by_vendor()
@@ -135,20 +188,21 @@ class AVTCamera:
 
         Run this before connect() to diagnose GigE subnet mismatches.
         """
-        with vmbpy.VmbSystem.get_instance() as vmb:
+        with AVTCamera._vmb_instance() as vmb:
             # ── GigE transport interfaces (NICs) ──────────────────────────
             print("=== GigE Transport Interfaces (NICs) ===")
             gige_nics: list[tuple[str, str, str]] = []   # (name, ip, mask)
             for iface in vmb.get_all_interfaces():
-                with iface:
-                    name = iface.get_id()
-                    try:
-                        ip   = AVTCamera._int_to_ip(iface.GevInterfaceSubnetIPAddress.get())
-                        mask = AVTCamera._int_to_ip(iface.GevInterfaceSubnetMask.get())
-                        print(f"  {name:30s}  {ip:16s}  mask {mask}")
-                        gige_nics.append((name, ip, mask))
-                    except Exception:
-                        pass   # non-GigE interface, skip
+                # Interface is not a context manager in vmbpy — access features
+                # directly. Non-GigE interfaces lack the Gev* features (caught).
+                name = iface.get_id()
+                try:
+                    ip   = AVTCamera._int_to_ip(iface.GevInterfaceSubnetIPAddress.get())
+                    mask = AVTCamera._int_to_ip(iface.GevInterfaceSubnetMask.get())
+                    print(f"  {name:30s}  {ip:16s}  mask {mask}")
+                    gige_nics.append((name, ip, mask))
+                except Exception:
+                    pass   # non-GigE interface, skip
 
             if not gige_nics:
                 print("  (none — Vimba X GigE Transport Layer may not be installed)")

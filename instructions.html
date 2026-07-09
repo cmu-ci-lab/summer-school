@@ -713,7 +713,8 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         out <code>--exposure</code> the scan reuses the exposure from your last visualizer session
         (it is recorded in <code>last_exposure.json</code> whenever you adjust it):
 <pre><code><span class="cm"># 0.9 mm range x 0.003 mm steps = 301 frames, centred on the coherence peak</span>
-python oct_scan.py --center 12.45 --range-mm 0.9 --step-mm 0.003</code></pre>
+<span class="cm"># use the peak location from the coherence panel as --center</span>
+python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
           <p>This saves a timestamped <code>stack_*.npy</code> plus a <code>*_meta.json</code> sidecar with the
           scan geometry into <code>oct_scans/</code>.</p>
           <div class="warn"><strong>Caution:</strong> <code>oct_scan.py</code> saves the stack as a
@@ -866,6 +867,37 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
         <a href="https://www.thorlabs.com/software_pages/ViewSoftwarePage.cfm?Code=Motion_Control">Kinesis</a>
         also works as a GUI fallback for debugging.</li>
       </ul>
+    </section>
+
+    <section class="step" id="troubleshooting">
+      <h3>Troubleshooting</h3>
+      <p><strong>Plain <code>python</code> fails</strong> (a <code>ModuleNotFoundError</code> for pylablib,
+      cv2, vmbpy, … or the hardware suddenly "isn't found") — you're almost certainly running the
+      <em>wrong</em> Python: base conda, the system interpreter, or some other environment that happens to be
+      on your PATH. Two fixes:</p>
+      <ul class="plain">
+        <li>With the <code>iccp-oct</code> environment active, call its interpreter explicitly:
+<pre><code>"$CONDA_PREFIX/bin/python" visualizer.py</code></pre>
+        </li>
+        <li>Or use the <code>./python</code> wrapper that ships with the repo — it always resolves this
+        project's interpreter (the active <code>iccp-oct</code> env, then <code>.venv</code>, then
+        <code>iccp-oct</code> in the usual conda install locations), no matter what shell state you're in:
+<pre><code>./python visualizer.py
+./python test_hardware.py</code></pre>
+        <p>If the wrapper is ever missing, a plain symlink to the env's interpreter does the same job:</p>
+<pre><code>ln -sf "$CONDA_PREFIX/bin/python" python</code></pre>
+        </li>
+      </ul>
+      <p><strong>pip installs "succeed" but the import still fails</strong> — same root cause: bare
+      <code>pip</code> installed the package into whichever Python was on PATH, not the project env. Always
+      install through the same interpreter you run with:</p>
+<pre><code>./python -m pip install &lt;package&gt;
+<span class="cm"># equivalently:</span>
+"$CONDA_PREFIX/bin/python" -m pip install &lt;package&gt;</code></pre>
+      <p>For hardware problems (stage or camera not found), re-run <code>./python test_hardware.py</code> —
+      see step&nbsp;1 of Part&nbsp;2 — and the <a href="docs.html">software guide</a> for deeper
+      debugging.</p>
+
       <p class="footer">Original (MATLAB) ICCP 2025 materials:
         <a href="https://github.com/sreekarsr/iccp-summer-school">github.com/sreekarsr/iccp-summer-school</a>
       </p>

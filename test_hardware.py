@@ -48,34 +48,40 @@ def find_vmbpy_wheel():
 
 
 def check_vmbpy():
-    """Return True if vmbpy imports. Otherwise print install guidance and return False.
+    """Return (ok, fix_hint). ok is True when vmbpy imports.
 
+    When vmbpy is missing, fix_hint is the actionable install guidance — it is
+    printed inline here AND repeated after the summary by main(), so the fix
+    is the last thing on screen rather than scrolled away above the traceback.
     Only relevant for Allied Vision cameras — IDS users can skip with --camera ids.
     """
     try:
         import vmbpy  # noqa: F401
-        return True
+        return True, None
     except ImportError:
-        print("⚠ vmbpy (Allied Vision Vimba X SDK) is not installed.")
+        lines = ["vmbpy (Allied Vision Vimba X SDK) is not installed."]
         wheel = find_vmbpy_wheel()
         if wheel:
-            print("  Found the SDK wheel — install it with:")
-            print(f'    pip install "{wheel}"')
+            lines += ["Good news: the Vimba X SDK is installed and its wheel was found.",
+                      "Install it into THIS Python and re-run:",
+                      f'    ./python -m pip install "{wheel}"']
         else:
-            print(f"  Vimba X not found. Download it from:\n    {VIMBA_URL}")
+            lines += [f"Vimba X not found. Download it from:\n    {VIMBA_URL}"]
             if sys.platform == "darwin":
-                print("  macOS installer: VimbaX_Setup-2023-4-macOS.dmg")
-                print("  After install, the wheel is at:")
-                print("    /Users/Shared/Allied Vision/Vimba X/Vmbpy/vmbpy-*.whl")
+                lines += ["macOS installer: VimbaX_Setup-2023-4-macOS.dmg",
+                          "After install, the wheel is at:",
+                          "    /Users/Shared/Allied Vision/Vimba X/Vmbpy/vmbpy-*.whl"]
             elif sys.platform.startswith("linux"):
-                print("  Linux installer: VimbaX_Setup-2026-1-Linux64.tar.gz (or _ARM64)")
-                print("  Wheel: /opt/VimbaX_<version>/api/python/vmbpy-*.whl")
+                lines += ["Linux installer: VimbaX_Setup-2026-1-Linux64.tar.gz (or _ARM64)",
+                          "Wheel: /opt/VimbaX_<version>/api/python/vmbpy-*.whl"]
             elif sys.platform.startswith("win"):
-                print("  Windows installer: VimbaX_Setup-2026-1-Win64.exe")
-                print("  Wheel: C:\\Program Files\\Allied Vision\\Vimba X\\api\\python\\vmbpy-*.whl")
-            print("  Then: pip install <path-to-vmbpy-*.whl>")
-        print("  (If you are using an IDS camera, re-run with: --camera ids)")
-        return False
+                lines += ["Windows installer: VimbaX_Setup-2026-1-Win64.exe",
+                          "Wheel: C:\\Program Files\\Allied Vision\\Vimba X\\api\\python\\vmbpy-*.whl"]
+            lines += ["Then: ./python -m pip install <path-to-vmbpy-*.whl>"]
+        lines += ["(If you are using an IDS camera, re-run with: --camera ids)"]
+        hint = "\n".join(lines)
+        print("⚠ " + hint.replace("\n", "\n  "))
+        return False, hint
 
 
 def test_stage():
@@ -140,11 +146,12 @@ def test_camera(vendor="auto"):
     print("="*60)
 
     # vmbpy is only needed for Allied Vision cameras. Skip the check for IDS.
+    hint = None
     if vendor in ("auto", "avt"):
-        has_vmbpy = check_vmbpy()
+        has_vmbpy, hint = check_vmbpy()
         if vendor == "avt" and not has_vmbpy:
             print("\n✗✗✗ Camera test FAILED — vmbpy not installed (see above).")
-            return False
+            return False, hint
 
     try:
         from camera import Camera
@@ -193,14 +200,14 @@ def test_camera(vendor="auto"):
         print("✓ Released camera connection")
 
         print("\n✓✓✓ Camera test PASSED")
-        return True
+        return True, None
 
     except Exception as e:
         print(f"\n✗✗✗ Camera test FAILED")
         print(f"Error: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return False, hint
 
 
 def main():
@@ -218,7 +225,7 @@ def main():
     print(f"  Camera vendor: {args.camera}")
 
     stage_ok = test_stage()
-    camera_ok = test_camera(vendor=args.camera)
+    camera_ok, camera_hint = test_camera(vendor=args.camera)
 
     # Summary
     print("\n" + "="*60)
@@ -227,6 +234,12 @@ def main():
     print(f"  Stage:  {'✓ PASS' if stage_ok else '✗ FAIL'}")
     print(f"  Camera: {'✓ PASS' if camera_ok else '✗ FAIL'}")
     print("="*60)
+
+    # Repeat the actionable camera fix LAST, so it's the first thing people
+    # see at the bottom of the terminal instead of scrolled away above.
+    if not camera_ok and camera_hint:
+        print("\n  ▶ HOW TO FIX THE CAMERA:")
+        print("  " + camera_hint.replace("\n", "\n  "))
 
     # Exit code: bitfield (bit 0 = stage, bit 1 = camera)
     exit_code = (0 if stage_ok else 1) + (0 if camera_ok else 2)

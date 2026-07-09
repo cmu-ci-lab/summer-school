@@ -400,6 +400,10 @@ cd summer-school
 <span class="cm"># or, with conda directly instead of setup.sh:</span>
 conda env create -f environment.yml
 conda activate iccp-oct          <span class="cm"># or: source .venv/bin/activate</span></code></pre>
+      <div class="note"><strong>Wrong <code>python</code>?</strong> If a script fails with
+      <code>ModuleNotFoundError</code> (pylablib, cv2, ...), you are probably running the wrong Python.
+      The repo ships a <code>./python</code> wrapper that always uses the project environment — just prefix
+      any command with <code>./</code>, e.g. <code>./python visualizer.py</code>.</div>
       <p>After the environment is built, install the <strong>camera SDK</strong> — this is a separate step
       that <code>environment.yml</code> doesn't cover, and which one you need depends on the camera on your
       rig: the Vimba&nbsp;X SDK (vmbpy wheel) for Allied Vision, or the IDS Software Suite plus
@@ -465,9 +469,17 @@ conda activate iccp-oct          <span class="cm"># or: source .venv/bin/activat
 <span class="cm"># --step: coarse stage step in mm; --window-mm: positional window for the DC mean</span>
 python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
           <div class="note"><strong>Stage control:</strong> the reference stage is driven from the keyboard —
-          <kbd>w</kbd>/<kbd>s</kbd> jog by the coarse step (hold to sweep), <kbd>e</kbd>/<kbd>d</kbd> by the
-          fine step (coarse ÷ 10), and <kbd>[</kbd>/<kbd>]</kbd> change the step size. The status bar along
+          <kbd>w</kbd>/<kbd>s</kbd> jog by the coarse step, <kbd>e</kbd>/<kbd>d</kbd> by the
+          fine step (coarse ÷ 10), and <kbd>[</kbd>/<kbd>]</kbd> change the step size. To sweep, just
+          <strong>hold <kbd>w</kbd> or <kbd>e</kbd></strong> — the stage moves continuously; there is no need
+          for slow individual presses. The status bar along
           the bottom shows exposure, frame rate, the current stage position, and the step sizes.</div>
+          <div class="warn"><strong>Don't sweep backwards:</strong> the backward keys <kbd>s</kbd>/<kbd>d</kbd>
+          produce a mechanical <em>kick-back</em> when the stage reverses direction (backlash). Use them only
+          to reposition; always take your measurement sweeps forward with <kbd>w</kbd>/<kbd>e</kbd>.</div>
+          <div class="note"><strong>Ignore the coherence panel for now</strong> — the plot and stat tiles on
+          the right of the window aren't needed until Section&nbsp;3 (OCT). In this section you only use the
+          live image and the stage keys.</div>
         </li>
         <li>Adjust your camera to be roughly upright by rotating it about the rotation mount with graduations.
           <figure><img src="instructions_media/p12_y0102_0.jpg" alt="Rotating the camera on its graduated mount" width="380"></figure>
@@ -479,6 +491,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             <li>coarsely adjusting the mirror post mounts,</li>
             <li>using the mirror adjuster knobs.</li>
           </ol>
+          <figure>
+            <video src="instructions_media/hw_knobs.mp4" controls muted loop playsinline preload="metadata" width="300"></video>
+            <figcaption><span class="vid-badge">video</span>The mirror adjuster knobs on the kinematic mount —
+            these tilt the mirror to steer its image of the LED.</figcaption>
+          </figure>
           <p>You should see two ‘blobs’ — (likely blurred) images of the LED — that move as you adjust
           the mirrors.</p>
           <figure><img src="instructions_media/viz_two_blobs.jpg" alt="Visualizer showing the two blurred blobs of LED light" width="640">
@@ -537,12 +554,21 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
     <section class="step" id="a5">
       <h3><span class="step-num">1</span>Coarse pathlength matching</h3>
       <ol class="sub">
-        <li>Block the object side using a piece of card. Change the lens focusing such that the reference
-        mirror comes into focus (about 1:1).
+        <li>Block the mirror on the motorized stage using a piece of card. Change the lens focusing such that
+        the other mirror comes into focus (about 1:1).
+          <figure>
+            <video src="instructions_media/hw_zoom_lens.mp4" controls muted loop playsinline preload="metadata" width="300"></video>
+            <figcaption><span class="vid-badge">video</span>Changing the lens focusing — turn the focus ring
+            on the Nikon lens.</figcaption>
+          </figure>
           <div class="note tip"><strong>Tip:</strong> Laterally translate the mirror using the micro-adjusters
           until you see the edge of the mirror, so it is easy to see if it comes into focus. You may also use
           dust or scratches present on the mirror.</div>
-          <figure><img src="instructions_media/p15_y0450_1.jpg" alt="Micro-adjuster used to translate the reference mirror" width="380"></figure>
+          <figure>
+            <video src="instructions_media/hw_mirror_focusing.mp4" controls muted loop playsinline preload="metadata" width="300"></video>
+            <figcaption><span class="vid-badge">video</span>Laterally translating the mirror with the stage's
+            micro-adjuster to bring its edge into view.</figcaption>
+          </figure>
           <figure>
             <video src="instructions_media/viz_focusing_on_glass.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
             <figcaption><span class="vid-badge">video</span>Bringing the mirror surface into focus — watch the
@@ -550,8 +576,9 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
           </figure>
           <p>You will need to increase the exposure time and/or LED power.</p>
         </li>
-        <li>Unblock the object arm and select a <strong>patch</strong> on the live view — two clicks: the
-        first anchors a corner, the second finalizes it. The coherence panel now tracks that patch.
+        <li>Unblock the mirror on the motorized stage and select a <strong>patch</strong> on the live view —
+        two clicks: the first anchors a corner, the second finalizes it. The coherence panel now tracks that
+        patch.
           <figure>
             <video src="instructions_media/viz_select_patch.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
             <figcaption><span class="vid-badge">video</span>Selecting a patch: one click to anchor a corner,
@@ -568,10 +595,12 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             same measure per-pixel to build the depth map.)</p>
           </div>
         </li>
-        <li>Step through stage positions with <kbd>w</kbd>/<kbd>s</kbd>, using a step that is neither too
-        small nor too large — around 0.3–0.5&nbsp;mm. Too small and the sweep takes forever; too large and
-        you can step clean over the region where the interference appears. The moment the pathlengths match
-        you will see the fringes appear in the live view, and a <strong>sharp peak</strong> in the panel.
+        <li>Do a <strong>full sweep</strong> of the stage: move it close to 0&nbsp;mm, then <em>hold</em>
+        <kbd>w</kbd> to sweep continuously all the way up to ~25&nbsp;mm (the end of travel). Use a step that
+        is neither too small nor too large — around 0.3–0.5&nbsp;mm. Too small and the sweep takes forever;
+        too large and you can step clean over the region where the interference appears. Somewhere along the
+        sweep the pathlengths match: you will see the fringes appear in the live view, and a
+        <strong>sharp peak</strong> in the panel.
           <figure>
             <video src="instructions_media/viz_coherence_sweep.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
             <figcaption><span class="vid-badge">video</span>Stepping the stage with a patch selected: the plot
@@ -650,7 +679,7 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li><em>(Optional)</em> You may readjust your focus depending on the object surface position. You may
         also reduce your aperture size to increase your depth of field.</li>
         <li>In <code>visualizer.py</code>, select a small patch on the coin (two clicks), and sweep the stage
-        with <kbd>w</kbd>/<kbd>s</kbd> once again, over a length comparable to the error due to the difference
+        (hold <kbd>w</kbd>, repositioning with <kbd>s</kbd> as needed) once again, over a length comparable to the error due to the difference
         in thickness of the coin and the mirror (1–2&nbsp;mm). The peak in the coherence panel gives you a
         ‘center’ position around which we will perform the scan.
           <figure>
@@ -663,10 +692,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li>Quit the visualizer, then perform a scan over a length of ~1&nbsp;mm with <code>oct_scan.py</code>.
         Use the temporal coherence length determined in step&nbsp;3 to choose the step size — a few steps per
         FWHM, e.g. ~28&nbsp;µm coherence → 5–10&nbsp;µm steps. The captured stack may take a while to save.
-        For the example below we used a <strong>0.9&nbsp;mm range with 3&nbsp;µm steps</strong>, starting just
-        below the peak found above:
-<pre><code><span class="cm"># 300 frames x 0.003 mm = 0.9 mm, starting just below the peak</span>
-python oct_scan.py --start 12.0 --step-mm 0.003 --frames 300</code></pre>
+        For the example below we used a <strong>0.9&nbsp;mm range with 3&nbsp;µm steps</strong>, centred on
+        the peak found above. The frame count is computed for you (range/step&nbsp;+&nbsp;1), and if you leave
+        out <code>--exposure</code> the scan keeps the exposure you dialed in with the visualizer:
+<pre><code><span class="cm"># 0.9 mm range x 0.003 mm steps = 301 frames, centred on the coherence peak</span>
+python oct_scan.py --center 12.45 --range-mm 0.9 --step-mm 0.003</code></pre>
           <p>This saves a timestamped <code>stack_*.npy</code> plus a <code>*_meta.json</code> sidecar with the
           scan geometry into <code>oct_scans/</code>.</p>
           <div class="warn"><strong>Caution:</strong> <code>oct_scan.py</code> saves the stack as a

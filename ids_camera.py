@@ -130,7 +130,16 @@ class IDSCamera:
     # ------------------------------------------------------------------
 
     def _apply_settings(self):
-        self.set_exposure(self.exposure_us)
+        if self.exposure_us is None:
+            # exposure_us=None means: keep whatever exposure the sensor
+            # currently has (e.g. dialed in during a visualizer session);
+            # read it back so callers can report/save it.
+            cur = ueye.double()
+            ueye.is_Exposure(self._hcam, ueye.IS_EXPOSURE_CMD_GET_EXPOSURE, cur, 8)
+            self.exposure_us = float(cur.value) * 1000.0
+            print(f"Using current sensor exposure: {self.exposure_us:.0f} µs")
+        else:
+            self.set_exposure(self.exposure_us)
         self.set_gain(self.gain_db)
 
     def set_exposure(self, exposure_us: float):

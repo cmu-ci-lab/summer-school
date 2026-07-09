@@ -715,8 +715,8 @@ def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
         stage_s, color = "stage not found — camera only", TEXT_MUTED
     txt.put((width // 2, cy), stage_s, 16, color, "demi", anchor="mm")
 
-    txt.put((width - 20, cy), "w/s move   e/d fine   [ ] step   c clear   a fit   q quit",
-            11, TEXT_MUTED, anchor="rm")
+    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   c clear   a fit   q quit",
+            14, TEXT_2, "medium", anchor="rm")
     return bar
 
 

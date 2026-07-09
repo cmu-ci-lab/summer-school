@@ -349,6 +349,10 @@ conda activate iccp-oct
 <span class="c"># venv path</span>
 source .venv/bin/activate        <span class="c"># Windows: .venv\Scripts\activate</span></code></pre>
 <p>In VSCode, pick the interpreter with <kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → <em>Python: Select Interpreter</em> → <em>Python (iccp-oct)</em> (or <code>./.venv</code>). Some scripts can also be run cell-by-cell in the Interactive Window, so it's worth setting this up now.</p>
+<div class="tip"><p><strong>Wrong <code>python</code>? Use <code>./python</code>.</strong> The repo ships a tiny wrapper script that always runs the project environment's interpreter, no matter which shell or conda env you're in. If a script fails with <code>ModuleNotFoundError</code> (pylablib, cv2, ...), you're almost certainly running the wrong Python — just prefix with <code>./</code>:</p>
+<pre><code>./python test_hardware.py
+./python visualizer.py
+./python oct_scan.py --center 1.70 --range-mm 0.4</code></pre></div>
 <p>After the environment, install the SDK for <em>your</em> camera — one of the next two subsections applies, not both.</p>
 
 <h3 id="install-vmbpy">Allied Vision cameras: the vmbpy wheel</h3>
@@ -477,9 +481,10 @@ cam.release()</code></pre>
 <span class="file-tag">visualizer.py</span>
 
 <p>The visualizer is the alignment tool: a streaming camera preview with keyboard stage control, plus a side panel where you pick a patch of pixels and its <strong>interference amplitude is plotted against stage position in real time</strong>. Use it to get your first image on screen, set the exposure, and locate the coherence function before committing to a scan. If no stage is connected it falls back to a camera-only preview.</p>
+<div class="note"><p><strong>Ignore the coherence panel for now.</strong> For the first sessions you only need the live image and the stage keys — the right-hand plot and stat tiles don't matter until <strong>Section&nbsp;3</strong> of the course exercises. Skip <a href="#viz-what">the coherence function</a> and <a href="#viz-reading">the reading recipe</a> below until then.</p></div>
 <pre><code>python visualizer.py
 python visualizer.py --step 0.1 --window-mm 0.2
-python visualizer.py --binning 4 --exposure 10000</code></pre>
+python visualizer.py --binning 2 --exposure 10000   <span class="c"># bin if the preview lags</span></code></pre>
 
 <h3 id="viz-anatomy">Anatomy of the window</h3>
 <figure class="diagram mockup">
@@ -533,7 +538,7 @@ python visualizer.py --binning 4 --exposure 10000</code></pre>
 <h3 id="viz-live">Live viewing basics</h3>
 <p>Three concepts behind the preview, worth understanding because they show up everywhere:</p>
 <ul>
-  <li><strong>Binning.</strong> The preview uses 4×4 on-sensor binning by default (<code>--binning</code>) for a fast frame rate. Binning sums pixels, so a binned image is ~N² brighter. Binning is reset to 1 when you quit, so full-resolution captures aren't affected.</li>
+  <li><strong>Binning.</strong> The preview runs at <em>full sensor resolution</em> by default. If the frame rate is sluggish on your machine, pass <code>--binning 2</code> (or <code>4</code>) to enable on-sensor binning. Binning sums pixels, so a binned image is ~N² brighter; it is reset to 1 when you quit, so full-resolution captures aren't affected.</li>
   <li><strong>Non-binned-equivalent exposure.</strong> Because of that brightness gain, the tool divides the real exposure by binning² and <em>displays the equivalent full-resolution value</em>. The number you dial in with <kbd>+</kbd>/<kbd>−</kbd> is therefore directly reusable as <code>--exposure</code> in <code>oct_scan.py</code>, which captures at full resolution.</li>
   <li><strong>Display gamma.</strong> The sensor is linear; your eye is not. The preview applies gamma 2.2 by default so dark scenes are visible (<code>--gamma 1.0</code> for a linear view). This affects the display only, never the data.</li>
 </ul>
@@ -553,17 +558,18 @@ python visualizer.py --binning 4 --exposure 10000</code></pre>
   <tr><td><kbd>c</kbd></td><td>Clear the patch selection <em>and</em> the plot</td></tr>
   <tr><td><kbd>r</kbd></td><td>Reset the plot data but keep the patch</td></tr>
   <tr><td><kbd>+</kbd> / <kbd>−</kbd></td><td>Increase / decrease exposure (500&nbsp;µs per press)</td></tr>
-  <tr><td><kbd>w</kbd> / <kbd>s</kbd> or <kbd>↑</kbd> / <kbd>↓</kbd></td><td>Move stage by ± the coarse step — <em>hold to sweep</em></td></tr>
-  <tr><td><kbd>e</kbd> / <kbd>d</kbd></td><td>Move stage by ± the fine step (coarse ÷ 10)</td></tr>
+  <tr><td><kbd>w</kbd> / <kbd>s</kbd> or <kbd>↑</kbd> / <kbd>↓</kbd></td><td>Move stage by ± the coarse step — <em>hold <kbd>w</kbd> to sweep continuously</em></td></tr>
+  <tr><td><kbd>e</kbd> / <kbd>d</kbd></td><td>Move stage by ± the fine step (coarse ÷ 10) — <em>hold <kbd>e</kbd> for a slow sweep</em></td></tr>
   <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Halve / double the coarse step size</td></tr>
   <tr><td><kbd>q</kbd></td><td>Quit</td></tr>
 </table></div>
+<div class="note"><p><strong>Sweep forward; don't sweep backward.</strong> To sweep, just <em>hold</em> <kbd>w</kbd> (coarse) or <kbd>e</kbd> (fine) — no need for slow individual presses. The backward keys <kbd>s</kbd>/<kbd>d</kbd> give a mechanical <em>kick-back</em> when the stage reverses direction (backlash), which disturbs the measurement — use them only to reposition, then sweep forward again through the region of interest.</p></div>
 
 <h3 id="viz-reading">Reading the coherence function — a practical recipe</h3>
 <ol class="steps">
   <li><strong>Pick a patch on structure.</strong> Select a small region with actual texture or fringes. A patch on a featureless background has nothing to modulate and the curve will stay flat.</li>
   <li><strong>Watch for saturation.</strong> If pixels clip at the top of the range, the amplitude measure is distorted. Lower the exposure until the brightest fringes stay below clipping.</li>
-  <li><strong>Sweep coarse, then fine.</strong> Hold <kbd>w</kbd>/<kbd>s</kbd> with a large step to cross the whole travel range and spot where the curve lifts off the floor; then shrink the step with <kbd>[</kbd> and re-sweep the bump slowly with <kbd>e</kbd>/<kbd>d</kbd> so the coherence function gets dense sampling.</li>
+  <li><strong>Sweep coarse, then fine.</strong> Hold <kbd>w</kbd> with a large step to cross the travel range and spot where the curve lifts off the floor; then shrink the step with <kbd>[</kbd>, reposition <em>below</em> the bump with <kbd>s</kbd>, and hold <kbd>e</kbd> to sweep forward through it slowly so the coherence function gets dense sampling (backward sweeps kick — see the note above).</li>
   <li><strong>Wait for the readout.</strong> The coherence FWHM and peak tiles fill in once the curve has crossed half-max on <em>both</em> sides of the peak — you must sweep through the whole coherence function, not just up one flank.</li>
   <li><strong>Note the peak position.</strong> That's the center of the region your scan should straddle. If the coherence function looks noisy, press <kbd>r</kbd> and re-sweep more slowly rather than trusting a ragged curve.</li>
 </ol>
@@ -576,27 +582,29 @@ python visualizer.py --binning 4 --exposure 10000</code></pre>
 <p>Once you know the exposure and where the coherence function peaks, record the sweep as a Z-stack and process it into an OCT depth map.</p>
 
 <h3 id="cap-scan">Capturing a stack: oct_scan.py</h3>
-<p><code>oct_scan.py</code> homes the stage, sweeps it in fixed steps, captures one frame per position, and saves everything. You give it the three numbers that define the scan — start position, step size, and frame count:</p>
-<pre><code>python oct_scan.py --start 1.50 --step-mm 0.001 --frames 400
-python oct_scan.py --start 1.50 --step-mm 0.002 --frames 200 \
+<p><code>oct_scan.py</code> homes the stage, sweeps it in fixed steps, captures one frame per position, and saves everything. You give it the three numbers that define the scan — <strong>centre position</strong> (take it straight from the visualizer's peak tile), <strong>scan range</strong>, and <strong>step size</strong>; the frame count is computed for you (range/step&nbsp;+&nbsp;1). If you don't pass <code>--exposure</code>, the scan keeps whatever exposure the sensor is currently set to — so the value you dialed in with the visualizer carries over automatically:</p>
+<pre><code>python oct_scan.py --center 1.70 --range-mm 0.4 --step-mm 0.001   <span class="c"># 401 frames</span>
+python oct_scan.py --center 1.70 --range-mm 0.4 --step-mm 0.002 \
     --exposure 8000 --save-dir coin_scan
+python oct_scan.py -n 2              <span class="c"># 2×2 spatial downsample at capture</span>
 python oct_scan.py ... --no-home     <span class="c"># stage already homed this session</span></code></pre>
 <div class="tablewrap"><table>
   <tr><th>Option</th><th>Meaning</th><th>Default</th></tr>
-  <tr><td><code>--start</code></td><td>Start position in mm — set it so the sweep straddles the coherence-function peak from the visualizer, with margin on both sides</td><td>1.50</td></tr>
-  <tr><td><code>--step-mm</code></td><td>Stage step per frame in mm. Sample the coherence function finely: several frames per coherence FWHM</td><td>0.001</td></tr>
-  <tr><td><code>-n, --frames</code></td><td>Number of frames — total range = frames × step</td><td>400</td></tr>
-  <tr><td><code>--exposure</code></td><td>Exposure in µs — reuse the value from the visualizer</td><td>8000</td></tr>
+  <tr><td><code>--center</code></td><td>Centre of the scan in mm — use the <strong>peak position</strong> from the visualizer; the sweep straddles it symmetrically</td><td>1.70</td></tr>
+  <tr><td><code>--range-mm</code></td><td>Total scan range in mm, centred on <code>--center</code> — make it comfortably wider than the coherence function</td><td>0.4</td></tr>
+  <tr><td><code>--step-mm</code></td><td>Stage step per frame in mm. Sample the coherence function finely: several frames per coherence FWHM. Frames = range/step + 1</td><td>0.001</td></tr>
+  <tr><td><code>-n, --downsample</code></td><td>Spatially average N×N pixel patches per frame before saving — shrinks the stack by N² and is recorded in the metadata</td><td>1</td></tr>
+  <tr><td><code>--exposure</code></td><td>Exposure in µs. If omitted, the sensor's <em>current</em> exposure is kept (i.e. the one you set in the visualizer)</td><td>current</td></tr>
   <tr><td><code>--save-dir</code></td><td>Output directory — use a fresh name per scan</td><td>oct_scans</td></tr>
   <tr><td><code>--camera</code></td><td><code>auto</code>, <code>avt</code>, or <code>ids</code></td><td>auto</td></tr>
   <tr><td><code>--no-home</code></td><td>Skip homing (faster when re-scanning in one session)</td><td>—</td></tr>
 </table></div>
-<p>It prints the scan plan up front (<code>400 frames × 0.001 mm (1.5 → 1.899 mm)</code>) and the readback position per frame, then writes two files into <code>--save-dir</code>:</p>
+<p>It prints the scan plan up front (<code>401 frames × 0.001 mm (1.5 → 1.9 mm, centre 1.7)</code>) and the readback position per frame, then writes two files into <code>--save-dir</code>:</p>
 <ul>
   <li>a timestamped <code>stack_*.npy</code> — the frames as one (H, W, N) array;</li>
-  <li>a <code>stack_*_meta.json</code> sidecar — step size, start position, the true per-frame positions, exposure, and pixel pitch, so the processing scripts know the scan geometry without touching the hardware.</li>
+  <li>a <code>stack_*_meta.json</code> sidecar — step size, centre/start positions, the true per-frame positions, exposure, downsample factor, and pixel pitch, so the processing scripts know the scan geometry without touching the hardware.</li>
 </ul>
-<p>The stage and camera are released automatically when the scan finishes (or fails). Example: the defaults sweep 400 frames × 1&nbsp;µm from 1.50&nbsp;mm — a 0.4&nbsp;mm range.</p>
+<p>The stage and camera are released automatically when the scan finishes (or fails). Example: the defaults sweep a 0.4&nbsp;mm range in 1&nbsp;µm steps centred on 1.70&nbsp;mm — 401 frames.</p>
 
 <h3 id="cap-check">Checking the stack before you leave the rig</h3>
 <div class="tip"><p><strong>Turn it into a movie and scrub through it</strong> — you should see fringes wash across the scene:</p>

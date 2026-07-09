@@ -293,8 +293,25 @@ class AVTCamera:
         except AttributeError:
             pass   # some cameras have no auto-exposure toggle
 
-        name = self._set_feature("ExposureTime", "ExposureTimeAbs", value=self.exposure_us)
-        self._exposure_feature = name
+        if self.exposure_us is None:
+            # exposure_us=None means: keep whatever exposure the sensor
+            # currently has (e.g. dialed in during a visualizer session);
+            # read it back so callers can report/save it.
+            self._exposure_feature = None
+            for feat in ("ExposureTime", "ExposureTimeAbs"):
+                try:
+                    self.exposure_us = float(self._cam.get_feature_by_name(feat).get())
+                    self._exposure_feature = feat
+                    break
+                except Exception:
+                    continue
+            if self.exposure_us is not None:
+                print(f"Using current sensor exposure: {self.exposure_us:.0f} µs")
+            else:
+                print("Warning: could not read the current exposure.")
+        else:
+            name = self._set_feature("ExposureTime", "ExposureTimeAbs", value=self.exposure_us)
+            self._exposure_feature = name
 
         try:
             self._set_feature("GainAuto", value="Off")

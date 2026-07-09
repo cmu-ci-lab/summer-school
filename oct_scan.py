@@ -2,16 +2,20 @@
 """
 oct_scan.py — capture an OCT Z-stack.
 
-Homes the stage (unless --no-home), sweeps it in fixed steps from a start
-position, captures one frame per position, and saves the stack as a
-timestamped .npy plus a _meta.json sidecar describing the scan geometry
-(used by depth_to_pointcloud.py and friends).
+Homes the stage (unless --no-home), sweeps it in fixed steps across a range
+centred on --center (take the centre from the visualizer's peak readout),
+captures one frame per position, and saves the stack as a timestamped .npy
+plus a _meta.json sidecar describing the scan geometry (used by
+depth_to_pointcloud.py and friends). The frame count is range/step + 1.
+
+If --exposure is not given, the scan keeps whatever exposure the sensor is
+currently set to — so an exposure dialed in with the visualizer carries over.
 
 Usage:
-    python oct_scan.py --start 1.50 --step-mm 0.001 --frames 400
-    python oct_scan.py --start 1.50 --step-mm 0.002 --frames 200 \
+    python oct_scan.py --center 1.70 --range-mm 0.4 --step-mm 0.001   # 401 frames
+    python oct_scan.py --center 1.70 --range-mm 0.4 --step-mm 0.002 \
         --exposure 8000 --save-dir coin_scan
-    python oct_scan.py -n 2 --frames 400    # 2x2 spatial downsample at capture
+    python oct_scan.py -n 2                 # 2x2 spatial downsample at capture
     python oct_scan.py ... --no-home        # stage already homed this session
 """
 
@@ -26,19 +30,24 @@ from oct import downsample_spatial
 def main():
     p = argparse.ArgumentParser(
         description="Capture an OCT Z-stack: sweep the stage and save a frame stack.")
-    p.add_argument("--start", type=float, default=1.50,
-                   help="start position in mm (default 1.50)")
+    p.add_argument("--center", type=float, default=1.70,
+                   help="centre of the scan in mm — use the peak position "
+                        "from the visualizer (default 1.70)")
+    p.add_argument("--range-mm", type=float, default=0.4,
+                   help="total scan range in mm, centred on --center "
+                        "(default 0.4)")
     p.add_argument("--step-mm", type=float, default=0.001,
-                   help="stage step per frame in mm (default 0.001)")
-    p.add_argument("--frames", type=int, default=400,
-                   help="number of frames to capture (default 400)")
+                   help="stage step per frame in mm (default 0.001); the "
+                        "frame count is range/step + 1")
     p.add_argument("-n", "--downsample", type=int, default=1,
                    help="spatially average NxN pixel patches per captured "
                         "frame before saving (default 1 = full resolution); "
                         "shrinks the stack by N^2 and is recorded in the "
                         "metadata so the lateral scale stays correct")
-    p.add_argument("--exposure", type=float, default=8000,
-                   help="exposure in microseconds (default 8000)")
+    p.add_argument("--exposure", type=float, default=None,
+                   help="exposure in microseconds (default: keep whatever "
+                        "the sensor is currently set to, e.g. from the "
+                        "visualizer session)")
     p.add_argument("--gain", type=float, default=0.0,
                    help="camera gain (default 0)")
     p.add_argument("--save-dir", default="oct_scans",
@@ -49,10 +58,20 @@ def main():
                    help="skip homing the stage first")
     args = p.parse_args()
 
-    end = args.start + (args.frames - 1) * args.step_mm
+    # Centre + range -> start position and frame count.
+    n_frames = int(round(args.range_mm / args.step_mm)) + 1
+    if n_frames < 2:
+        raise SystemExit(f"Scan range {args.range_mm:g} mm at {args.step_mm:g} mm "
+                         "steps gives fewer than 2 frames.")
+    start = args.center - args.range_mm / 2
+    if start < 0:
+        raise SystemExit(f"Scan would start at {start:g} mm (< 0): centre "
+                         f"{args.center:g} mm with range {args.range_mm:g} mm.")
+    end = start + (n_frames - 1) * args.step_mm
     ds = max(args.downsample, 1)
-    print(f"Scan: {args.frames} frames x {args.step_mm:g} mm  "
-          f"({args.start:g} -> {end:g} mm)   exposure {args.exposure:g} us"
+    exp_s = f"{args.exposure:g} us" if args.exposure is not None else "current sensor value"
+    print(f"Scan: {n_frames} frames x {args.step_mm:g} mm  "
+          f"({start:g} -> {end:g} mm, centre {args.center:g})   exposure {exp_s}"
           + (f"   downsample {ds}x{ds}" if ds > 1 else ""))
 
     # Hardware imports deferred so --help works without the drivers installed.
@@ -72,8 +91,8 @@ def main():
 
         positions = []
         frames = []
-        for i in range(args.frames):
-            stage.move_to(args.start + i * args.step_mm)
+        for i in range(n_frames):
+            stage.move_to(start + i * args.step_mm)
             frame = cam.capture()
             if ds > 1:
                 # Spatial NxN mean, rounded back to the sensor dtype so a
@@ -81,7 +100,7 @@ def main():
                 frame = np.rint(downsample_spatial(frame, ds)).astype(frame.dtype)
             frames.append(frame)
             positions.append(stage.position)
-            print(f"  [{i + 1}/{args.frames}]  {stage.position:.4f} mm")
+            print(f"  [{i + 1}/{n_frames}]  {stage.position:.4f} mm")
 
         stack = np.stack(frames, axis=-1)
         stack_name = cam.timestamped_filename(prefix="stack", ext="npy")
@@ -96,7 +115,9 @@ def main():
         sensor_um = getattr(cam, "pixel_size_um", None)
         meta = {
             "step_mm": args.step_mm,
-            "start_position_mm": args.start,
+            "start_position_mm": start,
+            "center_position_mm": args.center,
+            "range_mm": args.range_mm,
             "n_frames": len(positions),
             "positions_mm": positions,
             "exposure_us": cam.exposure_us,

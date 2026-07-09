@@ -1,0 +1,32 @@
+#!/bin/bash
+# ./python — always run THIS project's Python (the iccp-oct env), no matter
+# which shell or conda env you happen to be in.
+#
+# Use it when `python` mysteriously isn't working (base conda, system python,
+# some other env...): `./python oct_scan.py ...`, `./python visualizer.py`.
+#
+# Resolution order:
+#   1. the iccp-oct env, if it's the currently active conda env
+#   2. the project's .venv (if setup.sh created one)
+#   3. the iccp-oct env found via conda or the usual install locations
+if [ "$(basename "${CONDA_PREFIX:-}")" = "iccp-oct" ]; then
+    exec "$CONDA_PREFIX/bin/python" "$@"
+fi
+here="$(cd "$(dirname "$0")" && pwd)"
+if [ -x "$here/.venv/bin/python" ]; then
+    exec "$here/.venv/bin/python" "$@"
+fi
+candidates=()
+[ -n "$CONDA_EXE" ] && candidates+=("$(dirname "$(dirname "$CONDA_EXE")")")
+[ -n "$CONDA_PREFIX" ] && candidates+=("$CONDA_PREFIX")
+candidates+=("$HOME/opt/anaconda3" "$HOME/anaconda3" "$HOME/miniconda3" \
+             "$HOME/miniforge3" "/opt/anaconda3" "/opt/miniconda3" \
+             "/opt/homebrew/Caskroom/miniforge/base")
+for base in "${candidates[@]}"; do
+    if [ -x "$base/envs/iccp-oct/bin/python" ]; then
+        exec "$base/envs/iccp-oct/bin/python" "$@"
+    fi
+done
+echo "./python: no project environment (.venv or conda env 'iccp-oct') found." >&2
+echo "Run ./setup.sh first." >&2
+exit 1

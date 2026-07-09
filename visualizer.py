@@ -289,6 +289,9 @@ class Text:
         return canvas
 
 
+_GAMMA_LUTS = {}   # (dtype bits, maxv, gamma) -> uint8 lookup table
+
+
 def to_display_8bit(frame, gamma):
     """Convert a raw frame to a gamma-corrected 8-bit image for human viewing.
 
@@ -297,16 +300,30 @@ def to_display_8bit(frame, gamma):
     so a dark linear scene becomes visible), then scaled to 8-bit. Gamma is
     applied on the full-bit-depth data, before quantizing, so shadow detail
     isn't lost to an early bit-shift.
+
+    Integer frames go through a precomputed per-value lookup table: np.power
+    over a full-resolution frame costs ~50 ms, the LUT gather ~5 ms, which is
+    what makes an unbinned live preview feasible.
     """
+    def lut_for(nvals, maxv):
+        key = (nvals, maxv, gamma)
+        lut = _GAMMA_LUTS.get(key)
+        if lut is None:
+            norm = np.arange(nvals, dtype=np.float32) / maxv
+            if gamma > 0 and gamma != 1.0:
+                norm = np.power(norm, 1.0 / gamma, dtype=np.float32)
+            lut = (norm * 255.0).clip(0, 255).astype(np.uint8)
+            _GAMMA_LUTS[key] = lut
+        return lut
+
     if frame.dtype == np.uint8:
-        norm = frame.astype(np.float32) / 255.0
-    elif frame.dtype == np.uint16:
+        return cv2.LUT(frame, lut_for(256, 255.0))
+    if frame.dtype == np.uint16:
         # 12-bit sensors store values <= 4095 in a 16-bit container.
         maxv = 4095.0 if (frame.size and int(frame.max()) <= 4095) else 65535.0
-        norm = frame.astype(np.float32) / maxv
-    else:
-        mx = float(frame.max()) if frame.size else 0.0
-        norm = frame.astype(np.float32) / (mx if mx > 0 else 1.0)
+        return lut_for(65536, maxv)[frame]
+    mx = float(frame.max()) if frame.size else 0.0
+    norm = frame.astype(np.float32) / (mx if mx > 0 else 1.0)
     if gamma > 0 and gamma != 1.0:
         norm = np.power(norm, 1.0 / gamma, dtype=np.float32)
     return (norm * 255.0).clip(0, 255).astype(np.uint8)
@@ -709,8 +726,10 @@ def main():
     parser.add_argument("--step", type=float, default=1.0,
                         help="coarse stage step in mm (w/s or arrows); e/d "
                              f"moves 1/{FINE_RATIO} of this (default 1.0)")
-    parser.add_argument("--binning", type=int, default=4,
-                        help="on-sensor binning factor for the preview (default 4)")
+    parser.add_argument("--binning", type=int, default=1,
+                        help="on-sensor binning factor for the preview "
+                             "(default 1 = full resolution; try 2 or 4 if the "
+                             "preview lags)")
     parser.add_argument("--exposure", type=float, default=10000,
                         help="initial exposure in microseconds, non-binned-equivalent (default 10000)")
     parser.add_argument("--gamma", type=float, default=2.2,
@@ -906,9 +925,6 @@ def main():
             # Convert to a gamma-corrected 8-bit image so the scene is perceptible
             frame_display = to_display_8bit(frame, gamma)
 
-            # Convert to RGB for display (OpenCV uses BGR)
-            frame_rgb = cv2.cvtColor(frame_display, cv2.COLOR_GRAY2BGR)
-
             # Poll stage position at ~10 Hz
             now = time.time()
             if stage is not None and now - last_pos_t > 0.1:
@@ -952,15 +968,18 @@ def main():
                             samples_version += 1
                         last_coord = coord
 
-            # Scale down to fit the screen while preserving aspect ratio
-            h, w = frame_rgb.shape[:2]
+            # Scale down to fit the screen while preserving aspect ratio.
+            # Resize the single-channel image, THEN expand to BGR — at full
+            # sensor resolution this is 3x less data through the resize.
+            h, w = frame_display.shape[:2]
             scale = min(max_w / w, max_h / h, 1.0)
             if scale < 1.0:
-                frame_rgb = cv2.resize(
-                    frame_rgb,
+                frame_display = cv2.resize(
+                    frame_display,
                     (int(w * scale), int(h * scale)),
                     interpolation=cv2.INTER_AREA,
                 )
+            frame_rgb = cv2.cvtColor(frame_display, cv2.COLOR_GRAY2BGR)
             disp_state["scale"] = scale
             disp_state["img_w"] = frame_rgb.shape[1]
             disp_state["img_h"] = frame_rgb.shape[0]

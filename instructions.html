@@ -252,12 +252,12 @@
     <p><strong>Where this is going:</strong> by the end of this guide you will have built a scanner that
     can map a surface down to <strong>micron scale</strong> — the depth map below, and the transient video of
     the coherence gate sweeping across a coin, are both produced by the instrument you're about to build:</p>
-    <div class="vidgrid">
-      <figure style="flex:1 1 300px"><img src="instructions_media/depth_correct.jpg" alt="Teaser: micron-scale OCT depth map of a coin">
+    <div class="vidgrid" style="align-items:flex-start">
+      <figure style="flex:0 1 auto"><img src="instructions_media/depth_correct.jpg" style="height:240px;width:auto" alt="Teaser: micron-scale OCT depth map of a coin">
       <figcaption>A micron-scale depth map of a coin, recovered by your scanner.</figcaption></figure>
-      <figure style="flex:1 1 300px"><video src="instructions_media/oct_contrast_video.mp4" controls muted loop playsinline preload="metadata"></video>
-      <figcaption><span class="vid-badge">video</span>The coherence gate sweeping through the coin's surface
-      — raw frames left, interference contrast right.</figcaption></figure>
+      <figure style="flex:0 1 auto"><video src="instructions_media/oct_contrast_video.mp4" style="height:240px;width:auto" controls muted loop playsinline preload="metadata"></video>
+      <figcaption><span class="vid-badge">video</span>Visualizing the spatial coherence allows for
+      pseudo-transient imaging — raw frames left, interference contrast right.</figcaption></figure>
     </div>
     <div class="note"><strong>Tip:</strong> steps throughout this guide include short
     <span class="vid-badge">video</span> clips — watch them as you go; they show you what you should expect
@@ -417,7 +417,9 @@
 <pre><code><span class="cm"># one-time setup (see Software installations below for details)</span>
 git clone https://github.com/cmu-ci-lab/summer-school.git
 cd summer-school
-./setup.sh</code></pre>
+./setup.sh
+<span class="cm"># — or, if you'd rather not run the script and have conda already:</span>
+conda env create -f environment.yml</code></pre>
       <p>Then activate the environment — the command depends on which kind <code>setup.sh</code> built
       (it prints the right one when it finishes):</p>
 <pre><code><span class="cm"># if setup.sh used conda (it prefers conda when you have it):</span>

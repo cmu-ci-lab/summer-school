@@ -16,9 +16,6 @@ cd summer-school
 open instructions.html        # macOS; on Windows just double-click it
 ```
 
-For more detail on the software — installation, the `ThorlabsStage` / `Camera` API, the scan
-and processing pipeline, and troubleshooting — see [`docs.html`](docs.html).
-
 ## Quick start (software only)
 
 ```bash

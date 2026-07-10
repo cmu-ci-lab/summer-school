@@ -967,10 +967,6 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
       <p>The rig is a <strong>Thorlabs KDC101-driven motorized stage</strong> plus a monochrome
       machine-vision camera — either <strong>Allied Vision</strong> (via the Vimba&nbsp;X SDK) or
       <strong>IDS uEye</strong> (via pyueye). All the software runs from one Python environment.</p>
-      <div class="note"><strong>More detail:</strong> see the <a href="docs.html#install">software guide</a> for a
-      fuller explanation of the installation, the hardware API (<code>ThorlabsStage</code> /
-      <code>Camera</code>), and troubleshooting.</div>
-
       <h4>1 · Getting the code</h4>
       <p>All the scripts live in the same repository as this page —
       <a href="https://github.com/cmu-ci-lab/summer-school">github.com/cmu-ci-lab/summer-school</a> — so if
@@ -1097,8 +1093,7 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
 <span class="cm"># equivalently:</span>
 "$CONDA_PREFIX/bin/python" -m pip install &lt;package&gt;</code></pre>
       <p>For hardware problems (stage or camera not found), re-run <code>./python test_hardware.py</code> —
-      see step&nbsp;1 of Part&nbsp;2 — and the <a href="docs.html">software guide</a> for deeper
-      debugging.</p>
+      see step&nbsp;1 of Part&nbsp;2.</p>
 
       <p class="footer">Original (MATLAB) ICCP 2025 materials:
         <a href="https://github.com/sreekarsr/iccp-summer-school">github.com/sreekarsr/iccp-summer-school</a>

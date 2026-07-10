@@ -948,6 +948,12 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
 <pre><code>git clone https://github.com/cmu-ci-lab/summer-school.git
 cd summer-school</code></pre>
       <p>If fixes are posted during the course, <code>git pull</code> picks them up.</p>
+      <div class="note"><strong>Heads-up — Python required:</strong> everything runs from Python inside a
+      virtual environment. If possible, have
+      <a href="https://www.anaconda.com/download">Anaconda</a> (or
+      <a href="https://github.com/conda-forge/miniforge">Miniconda/Miniforge</a>) installed before the
+      course — that's the smoothest path. No conda? A plain Python&nbsp;3 install works too:
+      <code>setup.sh</code> will build a <code>.venv</code> instead.</div>
 
       <h4 id="sw-setup">2 · Python environment: setup.sh</h4>
       <p><code>setup.sh</code> prefers conda if you have it and falls back to a plain <code>.venv</code> if

@@ -900,42 +900,6 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
             <img src="instructions_media/depth_caution_clipped.jpg" alt="Depth map with large clipped yellow regions: scan range too short on one side">
             <img src="instructions_media/depth_caution_missed.jpg" alt="Depth map that is mostly speckle noise: scan range largely missed the surface">
           </div>
-
-          <div class="theory">
-            <p class="theory-title">What is computeMeanDiff doing?</p>
-            <p>Think of the stack one pixel at a time: as the reference stage sweeps, each pixel's intensity
-            is a slowly-varying DC background (the plain image of the coin) plus an interference term:</p>
-            <p class="math">
-              <var>I</var>(<var>x</var>,&hairsp;<var>y</var>,&hairsp;<var>z</var>) =
-              <var>I</var><sub>DC</sub>(<var>x</var>,&hairsp;<var>y</var>,&hairsp;<var>z</var>)
-              &nbsp;+&nbsp;
-              <var>A</var>(<var>x</var>,&hairsp;<var>y</var>,&hairsp;<var>z</var>)&hairsp;cos&hairsp;Δφ(<var>z</var>)
-            </p>
-            <p>where <var>I</var><sub>DC</sub> is the DC term (the incoherent image) and
-            <var>A</var>&hairsp;cos&hairsp;Δφ is the interference term, whose amplitude <var>A</var> is only
-            appreciable while the reference pathlength matches that pixel's surface depth <em>to within the
-            coherence length</em> — exactly the envelope you swept through in step&nbsp;3, now happening at a
-            different <var>z</var> for every pixel depending on the local height of the coin.
-            <code>compute_mean_diff</code> estimates <var>A</var> as mean&hairsp;|<var>I</var> −
-            <var>I</var><sub>DC</sub>|.</p>
-            <p><code>compute_mean_diff</code> extracts that envelope:</p>
-            <ul class="plain">
-              <li><strong>Estimate the DC background</strong> — a running temporal mean over a ~20-frame
-              window at each pixel (frames far from the envelope average the fringes away).</li>
-              <li><strong>Take the interference amplitude</strong> — |<var>I</var> − DC|, then average over a
-              small spatial patch (~5&nbsp;px) to smooth out fringe phase and noise. This is the same
-              patch-amplitude measure the visualizer plots live.</li>
-              <li><strong>Find the peak</strong> — per pixel, the depth map is the argmax of the envelope
-              along <var>z</var> (in frame indices; × step size for mm), and <code>maxamp</code> is the peak
-              height — a confidence measure.</li>
-            </ul>
-            <p>The coherence length from step&nbsp;3 shows up twice here: it is the <em>width</em> of the
-            per-pixel envelope, so it sets both the depth resolution of the final map and the largest scan
-            step you can get away with (a few frames per FWHM, or the peak slips between samples). Pixels
-            that never interfere — steep slopes or absorbing spots that return no light — have a noise-only
-            envelope, so their argmax is random: that's the speckly background outside the coin in the depth
-            map, which you can mask using <code>maxamp</code>.</p>
-          </div>
         </li>
         <li><em>(Optional)</em> To <strong>see</strong> what the processing sees, render a side-by-side movie
         of your scan with <code>oct_contrast_video.py</code>: the raw captured frames on the left, and the

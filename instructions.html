@@ -436,8 +436,11 @@ conda env create -f environment.yml</code></pre>
       </div>
       <div class="note"><strong>Wrong <code>python</code>?</strong> If a script fails with
       <code>ModuleNotFoundError</code> (pylablib, cv2, ...), you are probably running the wrong Python.
-      The repo ships a <code>./python</code> wrapper that always uses the project environment — just prefix
-      any command with <code>./</code>, e.g. <code>./python visualizer.py</code>.</div>
+      The repo ships a <code>./python</code> wrapper (already executable) that always resolves the project
+      environment — just prefix any command with <code>./</code>, e.g. <code>./python visualizer.py</code>.
+      Equivalently, roll your own symlink with the environment active:
+      <code>ln -sf "$CONDA_PREFIX/bin/python" python</code> — see
+      <a href="#troubleshooting">Troubleshooting</a>.</div>
       <p>After the environment is built, install the <strong>camera SDK</strong> — this is a separate step
       that <code>environment.yml</code> doesn't cover, and which one you need depends on the camera on your
       rig: the Vimba&nbsp;X SDK (vmbpy wheel) for Allied Vision, or the IDS Software Suite plus

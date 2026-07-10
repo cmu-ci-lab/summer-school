@@ -420,13 +420,20 @@ cd summer-school
 ./setup.sh
 <span class="cm"># — or, if you'd rather not run the script and have conda already:</span>
 conda env create -f environment.yml</code></pre>
-      <p>Then activate the environment — the command depends on which kind <code>setup.sh</code> built
-      (it prints the right one when it finishes):</p>
-<pre><code><span class="cm"># if setup.sh used conda (it prefers conda when you have it):</span>
-conda activate iccp-oct
-
-<span class="cm"># if it fell back to a venv instead:</span>
-source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activate</span></code></pre>
+      <p>Then activate the environment. <strong>Which command you use depends on which kind of
+      environment <code>setup.sh</code> built</strong> — it prints the right one when it finishes
+      (conda is preferred when you have it; otherwise it creates a <code>.venv</code>):</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin:12px 0">
+        <div style="flex:1 1 260px;min-width:0;border:1px solid var(--line);border-top:3px solid var(--blue);border-radius:10px;padding:12px 14px;background:var(--surface)">
+          <p style="margin:0 0 6px"><strong style="color:var(--blue)">Got conda?</strong> — setup.sh made a conda env:</p>
+<pre style="margin:0"><code>conda activate iccp-oct</code></pre>
+        </div>
+        <div style="flex:1 1 260px;min-width:0;border:1px solid var(--line);border-top:3px solid var(--violet);border-radius:10px;padding:12px 14px;background:var(--surface)">
+          <p style="margin:0 0 6px"><strong style="color:var(--violet)">No conda?</strong> — setup.sh made a <code>.venv</code>:</p>
+<pre style="margin:0"><code>source .venv/bin/activate
+<span class="cm"># Windows: .venv\Scripts\activate</span></code></pre>
+        </div>
+      </div>
       <div class="note"><strong>Wrong <code>python</code>?</strong> If a script fails with
       <code>ModuleNotFoundError</code> (pylablib, cv2, ...), you are probably running the wrong Python.
       The repo ships a <code>./python</code> wrapper that always uses the project environment — just prefix

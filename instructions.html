@@ -249,6 +249,16 @@
     <h1>Interferometric Imaging</h1>
     <p class="doc-sub">Build a Michelson-style interferometer on a breadboard, align it to see white-light
     interference fringes, and use it as a time-domain OCT scanner to recover a depth map of a coin.</p>
+    <p><strong>Where this is going:</strong> by the end of this guide you will have built a scanner that
+    can map a surface down to <strong>micron scale</strong> — the depth map below, and the transient video of
+    the coherence gate sweeping across a coin, are both produced by the instrument you're about to build:</p>
+    <div class="vidgrid">
+      <figure style="flex:1 1 300px"><img src="instructions_media/depth_correct.jpg" alt="Teaser: micron-scale OCT depth map of a coin">
+      <figcaption>A micron-scale depth map of a coin, recovered by your scanner.</figcaption></figure>
+      <figure style="flex:1 1 300px"><video src="instructions_media/oct_contrast_video.mp4" controls muted loop playsinline preload="metadata"></video>
+      <figcaption><span class="vid-badge">video</span>The coherence gate sweeping through the coin's surface
+      — raw frames left, interference contrast right.</figcaption></figure>
+    </div>
     <div class="note"><strong>Tip:</strong> steps throughout this guide include short
     <span class="vid-badge">video</span> clips — watch them as you go; they show you what you should expect
     to see at each stage, both on the breadboard and on screen.</div>
@@ -407,10 +417,14 @@
 <pre><code><span class="cm"># one-time setup (see Software installations below for details)</span>
 git clone https://github.com/cmu-ci-lab/summer-school.git
 cd summer-school
-./setup.sh
-<span class="cm"># or, with conda directly instead of setup.sh:</span>
-conda env create -f environment.yml
-conda activate iccp-oct          <span class="cm"># or: source .venv/bin/activate</span></code></pre>
+./setup.sh</code></pre>
+      <p>Then activate the environment — the command depends on which kind <code>setup.sh</code> built
+      (it prints the right one when it finishes):</p>
+<pre><code><span class="cm"># if setup.sh used conda (it prefers conda when you have it):</span>
+conda activate iccp-oct
+
+<span class="cm"># if it fell back to a venv instead:</span>
+source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activate</span></code></pre>
       <div class="note"><strong>Wrong <code>python</code>?</strong> If a script fails with
       <code>ModuleNotFoundError</code> (pylablib, cv2, ...), you are probably running the wrong Python.
       The repo ships a <code>./python</code> wrapper that always uses the project environment — just prefix
@@ -450,16 +464,15 @@ conda activate iccp-oct          <span class="cm"># or: source .venv/bin/activat
   Camera: <span class="ok">✓ PASS</span></code></pre>
       <p>Things to check in that output beyond the checkmarks:</p>
       <ul class="plain">
-        <li><strong>Position error</strong> should be well under 0.1&nbsp;mm — a ⚠ position-mismatch warning
-        means the stage moved but the readback disagrees (loose coupling, wrong stage model, or motion not
-        finished).</li>
+        <li><strong>Position error</strong> — after the +5&nbsp;mm move, the test reads the stage's own
+        encoder back and compares it with the commanded target; the difference should be well under
+        0.1&nbsp;mm. You'll essentially never see it fail — a ⚠ warning here usually just means the readback
+        happened before the motion fully settled, or (rarely) the wrong stage model was auto-detected.</li>
         <li><strong>Frame shape and dtype</strong> should match your sensor — full resolution, and
         <code>uint16</code> if the camera runs a 10/12-bit mode (IDS) rather than 8-bit.</li>
         <li><strong>The saved stack size</strong> should be plausible (a few frames × resolution ×
         1–2&nbsp;bytes).</li>
       </ul>
-      <p>The exit code is a bitfield — <code>0</code> all good, <code>1</code> stage failed, <code>2</code>
-      camera failed, <code>3</code> both — handy if you're scripting.</p>
       <div class="note"><strong>Stage not found?</strong> Check the USB cable and that the KDC101 is powered
       on. On macOS remember: no serial port is <em>expected</em> (the KDC101 is driven directly over libusb,
       so <code>libusb</code> must be installed). If a script crashed earlier, the hardware may still be held
@@ -544,16 +557,78 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         the current stage position and the coarse&thinsp;/&thinsp;fine step sizes in the middle; key hints on
         the right.</li>
       </ul>
-      <p><strong>Keyboard controls</strong> — <kbd>w</kbd>/<kbd>s</kbd> jog the stage by the coarse step
-      (hold to sweep), <kbd>e</kbd>/<kbd>d</kbd> by the fine step, <kbd>[</kbd>/<kbd>]</kbd> change the step
-      size, <kbd>+</kbd>/<kbd>-</kbd> change exposure, <kbd>a</kbd> autoscales the plot, <kbd>c</kbd> clears
-      the patch and plot, <kbd>r</kbd> resets the plot but keeps the patch, and <kbd>q</kbd> quits.</p>
+      <p><strong>Keyboard controls:</strong></p>
+      <ul class="plain">
+        <li><kbd>w</kbd>&thinsp;/&thinsp;<kbd>s</kbd> — jog the stage forward/back by the <em>coarse</em> step; <em>hold <kbd>w</kbd> to sweep</em></li>
+        <li><kbd>e</kbd>&thinsp;/&thinsp;<kbd>d</kbd> — jog forward/back by the <em>fine</em> step (coarse ÷ 10); hold <kbd>e</kbd> for a slow sweep</li>
+        <li><kbd>[</kbd>&thinsp;/&thinsp;<kbd>]</kbd> — halve / double the coarse step size</li>
+        <li><kbd>+</kbd>&thinsp;/&thinsp;<kbd>-</kbd> — brighten / dim (exposure)</li>
+        <li><kbd>a</kbd> — autoscale the plot (undo zoom/pan)</li>
+        <li><kbd>c</kbd> — clear the patch selection <em>and</em> the plot</li>
+        <li><kbd>r</kbd> — reset the plot but keep the patch</li>
+        <li><kbd>q</kbd> — quit</li>
+      </ul>
       <div class="note"><strong>Note:</strong> the exact layout may change a little as the tool evolves —
       that's ok; the three pieces (live view, coherence panel, status bar) stay the same.</div>
     </section>
 
     <section class="step" id="a2">
       <h3><span class="step-num">4</span>Collimating the LED</h3>
+      <div class="theory">
+        <p class="theory-title">Why collimate — what the two lens settings mean</p>
+        <p>There are two lenses in play: the <em>telescoping tube</em> on the LED, and the <em>camera
+        lens</em>. Collimating means sliding the LED to the tube lens's focal plane, so every point of the
+        LED leaves as a bundle of <strong>parallel rays</strong> — light "from infinity". A camera lens whose
+        focus ring is set to <strong>∞</strong> brings parallel rays back to a point, so the LED's active
+        element snaps into focus exactly when the collimation is right — that's what you're judging on
+        screen. Later (OCT part), the same camera lens is refocused to <strong>~1:1</strong> so the
+        <em>mirror/coin surface</em> is sharp instead:</p>
+        <svg viewBox="0 0 640 300" width="640" style="max-width:100%;height:auto;display:block;margin:10px auto"
+             font-size="12" text-anchor="middle">
+          <!-- row 1: collimation + infinity focus -->
+          <text x="320" y="16" font-weight="bold" fill="#7a9ae0">Alignment: collimated LED + camera focused at ∞</text>
+          <line x1="20" y1="72" x2="620" y2="72" stroke="#555" stroke-dasharray="3 5"/>
+          <circle cx="60" cy="72" r="4" fill="#e0b34d"/>
+          <text x="60" y="122" fill="#999">LED at the tube</text>
+          <text x="60" y="136" fill="#999">lens's focal plane</text>
+          <ellipse cx="150" cy="72" rx="9" ry="40" fill="rgba(122,154,224,.25)" stroke="#7a9ae0"/>
+          <line x1="60" y1="72" x2="150" y2="36" stroke="#e0b34d"/>
+          <line x1="60" y1="72" x2="150" y2="72" stroke="#e0b34d"/>
+          <line x1="60" y1="72" x2="150" y2="108" stroke="#e0b34d"/>
+          <line x1="150" y1="36" x2="420" y2="36" stroke="#e0b34d"/>
+          <line x1="150" y1="72" x2="420" y2="72" stroke="#e0b34d"/>
+          <line x1="150" y1="108" x2="420" y2="108" stroke="#e0b34d"/>
+          <text x="285" y="30" fill="#999">parallel rays ("at infinity")</text>
+          <ellipse cx="420" cy="72" rx="9" ry="40" fill="rgba(122,154,224,.25)" stroke="#7a9ae0"/>
+          <text x="420" y="132" fill="#999">camera lens, ring at ∞</text>
+          <line x1="420" y1="36" x2="540" y2="72" stroke="#e0b34d"/>
+          <line x1="420" y1="72" x2="540" y2="72" stroke="#e0b34d"/>
+          <line x1="420" y1="108" x2="540" y2="72" stroke="#e0b34d"/>
+          <line x1="545" y1="40" x2="545" y2="104" stroke="#bbb" stroke-width="3"/>
+          <text x="580" y="76" fill="#999">sensor</text>
+          <!-- row 2: ~1:1 focusing -->
+          <text x="320" y="176" font-weight="bold" fill="#7a9ae0">OCT: camera refocused to ~1:1 on the mirror / coin surface</text>
+          <line x1="20" y1="238" x2="620" y2="238" stroke="#555" stroke-dasharray="3 5"/>
+          <line x1="60" y1="200" x2="60" y2="276" stroke="#bbb" stroke-width="3"/>
+          <line x1="60" y1="238" x2="60" y2="210" stroke="#e0b34d" stroke-width="2"/>
+          <circle cx="60" cy="210" r="3" fill="#e0b34d"/>
+          <text x="60" y="292" fill="#999">mirror / coin surface</text>
+          <ellipse cx="300" cy="238" rx="9" ry="40" fill="rgba(122,154,224,.25)" stroke="#7a9ae0"/>
+          <text x="300" y="292" fill="#999">same lens, ring near 1:1</text>
+          <line x1="60" y1="210" x2="300" y2="210" stroke="#e0b34d"/>
+          <line x1="300" y1="210" x2="540" y2="266" stroke="#e0b34d"/>
+          <line x1="60" y1="210" x2="540" y2="266" stroke="#e0b34d"/>
+          <line x1="545" y1="206" x2="545" y2="270" stroke="#bbb" stroke-width="3"/>
+          <line x1="540" y1="238" x2="540" y2="266" stroke="#e0b34d" stroke-width="2"/>
+          <circle cx="540" cy="266" r="3" fill="#e0b34d"/>
+          <text x="583" y="242" fill="#999">sensor</text>
+          <text x="300" y="228" fill="#999">object ≈ image distance → magnification ≈ 1</text>
+        </svg>
+        <p>Why bother? Collimated light means the two arms see the same flat wavefront, so any pathlength
+        difference comes purely from the arm lengths — which is exactly the quantity the stage will scan.
+        And at ~1:1 magnification, one camera pixel corresponds to one pixel-sized patch of the surface,
+        which is what lets the depth map's lateral scale be read straight off the sensor's pixel pitch.</p>
+      </div>
       <ol class="sub">
         <li>Set the lens to infinity focusing.
           <figure>
@@ -725,21 +800,21 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
           &nbsp;≈&nbsp;
           <span class="frac"><span class="num"><var>λ</var><sup>2</sup></span><span class="den"><var>n</var>&hairsp;Δ<var>λ</var></span></span>
         </p>
-        <p>with <var>n</var>&nbsp;=&nbsp;1 in air. <span class="ph">[Placeholder — update with your LED +
-        filter]</span> For our LED behind the 10&nbsp;nm bandpass filter (<var>λ</var> ≈ 660&nbsp;nm,
+        <p>with <var>n</var>&nbsp;=&nbsp;1 in air. For our LED behind the 10&nbsp;nm bandpass filter (<var>λ</var> ≈ 660&nbsp;nm,
         Δ<var>λ</var> ≈ 10&nbsp;nm) this gives <var>L</var> ≈ (660&nbsp;nm)²&nbsp;/&nbsp;10&nbsp;nm ≈
         <strong>44&nbsp;µm</strong>. For a Gaussian spectrum the exact FWHM-to-FWHM relation carries an extra
         factor of 2&thinsp;ln&thinsp;2/π ≈ 0.44, i.e. <var>L</var> ≈ <strong>19&nbsp;µm</strong> — so a
         measured envelope FWHM of a few tens of microns (here ≈ 28&nbsp;µm) is right where it should be.
-        Without the filter, the LED's full ~25&nbsp;nm bandwidth would cut this roughly in half.</p>
+        Without the filter, the LED's full ~25&nbsp;nm bandwidth would cut this roughly in half — and some
+        LEDs are much broader still (the 565&nbsp;nm one, for example).</p>
       </div>
     </section>
 
     <section class="step" id="a8">
       <h3><span class="step-num">4</span>Scanning a coin</h3>
       <ol class="sub">
-        <li>When you're ready, <strong>ask for help</strong> to remove the rectangular mirror from the mirror
-        mount. You can then replace it with a coin (quarter/euro/…).
+        <li>When you're ready, <strong>ask for a coin sample mount</strong> to swap in place of the
+        rectangular mirror, and mount a coin (quarter/euro/…) on it.
           <figure><img src="instructions_media/p18_y0367_1.jpg" alt="Coin mounted in place of the rectangular mirror" width="380"></figure>
         </li>
         <li>Insert the 0.6&nbsp;OD ND filter (placed at a slight angle to avoid inter-reflections) in the light
@@ -815,11 +890,20 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
           <div class="theory">
             <p class="theory-title">What is computeMeanDiff doing?</p>
             <p>Think of the stack one pixel at a time: as the reference stage sweeps, each pixel's intensity
-            <var>I</var>(<var>x</var>,&hairsp;<var>y</var>,&hairsp;<var>z</var>) is a slowly-varying DC
-            background (the plain image of the coin) plus an interference term. The interference term is only
+            is a slowly-varying DC background (the plain image of the coin) plus an interference term:</p>
+            <p class="math">
+              <var>I</var>(<var>x</var>,&hairsp;<var>y</var>,&hairsp;<var>z</var>) =
+              <var>I</var><sub>DC</sub>(<var>x</var>,&hairsp;<var>y</var>,&hairsp;<var>z</var>)
+              &nbsp;+&nbsp;
+              <var>A</var>(<var>x</var>,&hairsp;<var>y</var>,&hairsp;<var>z</var>)&hairsp;cos&hairsp;Δφ(<var>z</var>)
+            </p>
+            <p>where <var>I</var><sub>DC</sub> is the DC term (the incoherent image) and
+            <var>A</var>&hairsp;cos&hairsp;Δφ is the interference term, whose amplitude <var>A</var> is only
             appreciable while the reference pathlength matches that pixel's surface depth <em>to within the
             coherence length</em> — exactly the envelope you swept through in step&nbsp;3, now happening at a
-            different <var>z</var> for every pixel depending on the local height of the coin.</p>
+            different <var>z</var> for every pixel depending on the local height of the coin.
+            <code>compute_mean_diff</code> estimates <var>A</var> as mean&hairsp;|<var>I</var> −
+            <var>I</var><sub>DC</sub>|.</p>
             <p><code>compute_mean_diff</code> extracts that envelope:</p>
             <ul class="plain">
               <li><strong>Estimate the DC background</strong> — a running temporal mean over a ~20-frame
@@ -874,30 +958,45 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
       fuller explanation of the installation, the hardware API (<code>ThorlabsStage</code> /
       <code>Camera</code>), and troubleshooting.</div>
 
-      <p><strong>Getting the code</strong> — all the scripts live in the course repository at
-      <a href="https://github.com/cmu-ci-lab/summer-school">github.com/cmu-ci-lab/summer-school</a>.
-      Clone it and run everything from inside it:</p>
+      <h4>1 · Getting the code</h4>
+      <p>All the scripts live in the same repository as this page —
+      <a href="https://github.com/cmu-ci-lab/summer-school">github.com/cmu-ci-lab/summer-school</a> — so if
+      you're reading this locally, you already have them. If not:</p>
 <pre><code>git clone https://github.com/cmu-ci-lab/summer-school.git
 cd summer-school</code></pre>
+      <p>If fixes are posted during the course, <code>git pull</code> picks them up.</p>
 
-      <p><strong>Setting up the Python environment</strong> — <code>setup.sh</code> prefers conda if you
-      have it and falls back to a plain <code>.venv</code> if you don't. Run it from the Terminal on macOS,
-      or from Git&nbsp;Bash on Windows:</p>
+      <h4>2 · Python environment: setup.sh</h4>
+      <p><code>setup.sh</code> prefers conda if you have it and falls back to a plain <code>.venv</code> if
+      you don't. On macOS run it from the Terminal; on Windows, run <code>setup.bat</code> from Command
+      Prompt or PowerShell (it does the same thing — Git&nbsp;Bash works too if you have it, but isn't
+      required):</p>
 <pre><code>chmod +x setup.sh
 ./setup.sh
 <span class="cm"># or, to force a venv even when conda exists:</span>
 FORCE_VENV=1 ./setup.sh</code></pre>
-      <p>It creates or updates the <code>iccp-oct</code> environment from <code>environment.yml</code>
-      (Python&nbsp;3.12, numpy, scipy, matplotlib, OpenCV, pyserial, pylablib, pyftdi), installs the vmbpy
-      wheel if Vimba&nbsp;X is already present, and registers a Jupyter kernel.</p>
-      <p><strong>Alternative: manual conda install</strong> — if you'd rather not run the script and already
-      have conda, you can create the environment directly from <code>environment.yml</code>:</p>
+      <div class="note"><strong>What the script actually does</strong> (it's safe to re-run any time — every
+      step is skipped if already done, and nothing outside the repo and the <code>iccp-oct</code>
+      environment is touched):
+      <ul class="plain">
+        <li>creates or updates the <code>iccp-oct</code> environment from <code>environment.yml</code>
+        (Python&nbsp;3.12, numpy, scipy, matplotlib, OpenCV, pyserial, pylablib, pyftdi);</li>
+        <li>searches the standard Vimba&nbsp;X install locations and installs the vmbpy wheel into the
+        environment if the SDK is already present;</li>
+        <li>on macOS, installs <code>libusb</code> (conda-forge or Homebrew) — the stage backend;</li>
+        <li>registers a Jupyter kernel and prints the activation command for whatever it built.</li>
+      </ul></div>
+
+      <h4>3 · Alternative: manual conda install</h4>
+      <p>If you'd rather not run the script and already have conda, create the environment directly from
+      <code>environment.yml</code>:</p>
 <pre><code>conda env create -f environment.yml
 conda activate iccp-oct</code></pre>
-      <p>(You'll still need to install your camera's SDK/bindings by hand — see your platform below — and on
+      <p>(You'll still need to install your camera's SDK/bindings by hand — see step&nbsp;5 below — and on
       macOS the stage backend: <code>conda install -c conda-forge libusb</code> plus
       <code>pip install pyftdi</code>.)</p>
-      <p><strong>Activating</strong> the environment afterwards:</p>
+
+      <h4>4 · Activating the environment</h4>
 <pre><code><span class="cm"># conda path</span>
 conda activate iccp-oct
 <span class="cm"># venv path</span>
@@ -905,15 +1004,17 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
       <p>In VSCode, pick the interpreter with <kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> →
       <em>Python: Select Interpreter</em> → <em>Python (iccp-oct)</em> (or <code>./.venv</code>). Some scripts
       can also be run cell-by-cell in the Interactive Window, so it's worth setting this up now.</p>
-      <p>Then set up the drivers and camera SDK for your platform — only the camera you actually have
-      applies.</p>
+
+      <h4>5 · Camera SDK &amp; platform notes</h4>
+      <p>This last step depends on your platform and on which camera your rig has — only one camera entry
+      applies to you.</p>
 
       <h4>Windows</h4>
       <ul class="plain">
-        <li><strong>Stage:</strong> the Thorlabs Kinesis/APT driver must be installed for the KDC101.
+        <li><strong>Stage:</strong> nothing to install — pylablib drives the KDC101 directly over USB.
         <em>(Optional)</em> Thorlabs
         <a href="https://www.thorlabs.com/software_pages/ViewSoftwarePage.cfm?Code=Motion_Control">Kinesis</a>
-        also works as a GUI fallback for debugging.</li>
+        gives you a GUI fallback for debugging the stage.</li>
         <li><strong>Allied Vision camera:</strong> <code>vmbpy</code> is <em>not on PyPI</em> — it ships as a
         wheel inside the
         <a href="https://www.alliedvision.com/en/support/software-downloads/vimba-x-sdk/vimba-x">Vimba&nbsp;X</a>
@@ -925,7 +1026,9 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
         Windows 32/64-bit</a> (the native uEye SDK and driver; without it <code>pyueye</code> imports but
         every call fails), then <code>pip install pyueye</code> into the project environment. If you're on
         IDS hardware you can skip Vimba&nbsp;X entirely; pass <code>--camera ids</code> to the hardware test
-        so it doesn't check for vmbpy.</li>
+        so it doesn't check for vmbpy. <strong>Note:</strong> the IDS Software Suite has <em>no macOS
+        support</em> — IDS cameras are Windows-only in this course (which is why the macOS section below has
+        no IDS entry).</li>
       </ul>
 
       <h4>macOS</h4>
@@ -937,6 +1040,8 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
         <li><strong>Allied Vision camera:</strong> install <code>VimbaX_Setup-2023-4-macOS.dmg</code>, then
         re-run <code>setup.sh</code> (it finds and installs the wheel automatically), or install it yourself
         from <code>/Users/Shared/Allied Vision/Vimba X/Vmbpy/vmbpy-*.whl</code>.</li>
+        <li><strong>IDS camera:</strong> not supported on macOS (the IDS Software Suite is Windows-only in
+        this course) — use a Windows laptop for IDS rigs.</li>
       </ul>
       <div class="warn"><strong>Caution (macOS):</strong> the Vimba&nbsp;X installer package may be blocked
       by macOS when you run it. If that happens, open <em>System Settings → Privacy&nbsp;&amp;&nbsp;Security</em>,

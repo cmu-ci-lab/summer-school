@@ -81,6 +81,10 @@
 
   /* ── Sidebar ── */
   .side-title { font-size: 15px; font-weight: 700; letter-spacing: .01em; margin: 0 0 2px; }
+  a.side-title { display: block; color: var(--text); text-decoration: none; }
+  a.side-title:hover { color: var(--blue); }
+  .sidebar nav a.side-sub-link { padding-left: 2.2em; font-size: 12.5px; color: var(--muted); }
+  .sidebar nav a.side-sub-link:hover { color: var(--text); }
   .side-sub { font-size: 12.5px; color: var(--muted); margin: 0 0 20px; }
   .side-part { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin: 20px 0 6px; }
   .sidebar nav a {
@@ -214,7 +218,7 @@
 
 <div class="layout">
   <aside class="sidebar">
-    <p class="side-title">Interferometric Imaging</p>
+    <a class="side-title" href="#top">Interferometric Imaging</a>
     <p class="side-sub">ICCP 2026 Summer School</p>
     <nav>
       <p class="side-part">Part 1 · Construction</p>
@@ -239,13 +243,18 @@
       <a href="#a9"><span class="side-num">5</span>Scanning other objects</a>
       <p class="side-part">Appendix</p>
       <a href="#software"><span class="side-num">·</span>Software installations</a>
+      <a class="side-sub-link" href="#sw-code">1 · Getting the code</a>
+      <a class="side-sub-link" href="#sw-setup">2 · Python environment</a>
+      <a class="side-sub-link" href="#sw-conda">3 · Manual conda install</a>
+      <a class="side-sub-link" href="#sw-activate">4 · Activating</a>
+      <a class="side-sub-link" href="#sw-sdk">5 · Camera SDK &amp; platforms</a>
       <a href="#troubleshooting"><span class="side-num">·</span>Troubleshooting</a>
     </nav>
   </aside>
 
   <main class="content"><div class="content-inner">
 
-    <p class="doc-kicker">ICCP 2026 Summer School</p>
+    <p class="doc-kicker" id="top">ICCP 2026 Summer School</p>
     <h1>Interferometric Imaging</h1>
     <p class="doc-sub">Build a Michelson-style interferometer on a breadboard, align it to see white-light
     interference fringes, and use it as a time-domain OCT scanner to recover a depth map of a coin.</p>
@@ -932,7 +941,7 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
       <p>The rig is a <strong>Thorlabs KDC101-driven motorized stage</strong> plus a monochrome
       machine-vision camera — either <strong>Allied Vision</strong> (via the Vimba&nbsp;X SDK) or
       <strong>IDS uEye</strong> (via pyueye). All the software runs from one Python environment.</p>
-      <h4>1 · Getting the code</h4>
+      <h4 id="sw-code">1 · Getting the code</h4>
       <p>All the scripts live in the same repository as this page —
       <a href="https://github.com/cmu-ci-lab/summer-school">github.com/cmu-ci-lab/summer-school</a> — so if
       you're reading this locally, you already have them. If not:</p>
@@ -940,7 +949,7 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
 cd summer-school</code></pre>
       <p>If fixes are posted during the course, <code>git pull</code> picks them up.</p>
 
-      <h4>2 · Python environment: setup.sh</h4>
+      <h4 id="sw-setup">2 · Python environment: setup.sh</h4>
       <p><code>setup.sh</code> prefers conda if you have it and falls back to a plain <code>.venv</code> if
       you don't. On macOS run it from the Terminal; on Windows, run <code>setup.bat</code> from Command
       Prompt or PowerShell (it does the same thing — Git&nbsp;Bash works too if you have it, but isn't
@@ -961,7 +970,7 @@ FORCE_VENV=1 ./setup.sh</code></pre>
         <li>registers a Jupyter kernel and prints the activation command for whatever it built.</li>
       </ul></div>
 
-      <h4>3 · Alternative: manual conda install</h4>
+      <h4 id="sw-conda">3 · Alternative: manual conda install</h4>
       <p>If you'd rather not run the script and already have conda, create the environment directly from
       <code>environment.yml</code>:</p>
 <pre><code>conda env create -f environment.yml
@@ -970,7 +979,7 @@ conda activate iccp-oct</code></pre>
       macOS the stage backend: <code>conda install -c conda-forge libusb</code> plus
       <code>pip install pyftdi</code>.)</p>
 
-      <h4>4 · Activating the environment</h4>
+      <h4 id="sw-activate">4 · Activating the environment</h4>
 <pre><code><span class="cm"># conda path</span>
 conda activate iccp-oct
 <span class="cm"># venv path</span>
@@ -979,7 +988,7 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
       <em>Python: Select Interpreter</em> → <em>Python (iccp-oct)</em> (or <code>./.venv</code>). Some scripts
       can also be run cell-by-cell in the Interactive Window, so it's worth setting this up now.</p>
 
-      <h4>5 · Camera SDK &amp; platform notes</h4>
+      <h4 id="sw-sdk">5 · Camera SDK &amp; platform notes</h4>
       <p>This last step depends on your platform and on which camera your rig has — only one camera entry
       applies to you.</p>
 

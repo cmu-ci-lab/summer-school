@@ -869,7 +869,8 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         out <code>--exposure</code> the scan reuses the exposure from your last visualizer session
         (it is recorded in <code>last_exposure.json</code> whenever you adjust it):
 <pre><code><span class="cm"># 0.9 mm range x 0.003 mm steps = 301 frames, centred on the coherence peak</span>
-<span class="cm"># use the peak location from the coherence panel as --center</span>
+<span class="cm"># REPLACE the numbers with YOURS: --center is the peak position from the</span>
+<span class="cm"># coherence panel, --step-mm follows from YOUR measured coherence FWHM</span>
 python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
           <p>This saves a timestamped <code>stack_*.npy</code> plus a <code>*_meta.json</code> sidecar with the
           scan geometry into <code>oct_scans/</code>.</p>

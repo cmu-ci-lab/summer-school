@@ -752,6 +752,12 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         (hold <kbd>w</kbd>, repositioning with <kbd>s</kbd> as needed) once again, over a length comparable to the error due to the difference
         in thickness of the coin and the mirror (1–2&nbsp;mm). The peak in the coherence panel gives you a
         ‘center’ position around which we will perform the scan.
+          <div class="warn"><strong>!! If you really can't find the peak:</strong> the visualizer has an
+          <em>autofind</em> — press <kbd>f</kbd> (with a patch selected) and it sweeps the full stage travel
+          at the coarse step, then moves to the position of maximum amplitude. It refuses to start if the
+          sweep would take more than ~5 minutes (make the step bigger with <kbd>]</kbd>). It is
+          <strong>very experimental</strong> right now, so it might not work — treat it as a last resort, not
+          a substitute for the manual sweep. <kbd>f</kbd> again cancels.</div>
           <p>When you are at the right depth, you should see this <strong>moving speckle</strong> inside the
           highlighted patch — the coin's rough surface makes the interference grainy and shimmering rather
           than smooth fringes:</p>
@@ -832,6 +838,20 @@ python oct_scan.py --center 12.3 --range-mm 0.9 --step-mm 0.003</code></pre>
             envelope, so their argmax is random: that's the speckly background outside the coin in the depth
             map, which you can mask using <code>maxamp</code>.</p>
           </div>
+        </li>
+        <li><em>(Optional)</em> To <strong>see</strong> what the processing sees, render a side-by-side movie
+        of your scan with <code>oct_contrast_video.py</code>: the raw captured frames on the left, and the
+        <code>compute_mean_diff</code> interference amplitude |<var>I</var>&nbsp;−&nbsp;DC| on the right — the
+        quantity whose per-pixel argmax becomes the depth map. Watch the bright band of contrast wash across
+        the coin as the stage sweeps through each surface depth:
+<pre><code>python oct_contrast_video.py -s oct_scans/stack_&lt;timestamp&gt;.npy
+<span class="dim"># -n 2 downsamples for speed; --fps and -o control the output movie</span></code></pre>
+          <figure>
+            <video src="instructions_media/oct_contrast_video.mp4" controls muted loop playsinline preload="metadata" width="640"></video>
+            <figcaption><span class="vid-badge">video</span>Raw frames (left) vs interference amplitude
+            (right) for a coin scan — the contrast band sweeping across the surface is the coherence gate
+            crossing each pixel's depth; its per-pixel peak position is the depth map.</figcaption>
+          </figure>
         </li>
       </ol>
     </section>

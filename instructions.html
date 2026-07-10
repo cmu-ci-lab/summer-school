@@ -444,8 +444,9 @@ conda env create -f environment.yml</code></pre>
       <p>After the environment is built, install the <strong>camera SDK</strong> — this is a separate step
       that <code>environment.yml</code> doesn't cover, and which one you need depends on the camera on your
       rig: the Vimba&nbsp;X SDK (vmbpy wheel) for Allied Vision, or the IDS Software Suite plus
-      <code>pyueye</code> for IDS uEye. See <a href="#software">Software installations</a> below for
-      step-by-step instructions. With the environment active and the SDK in place, verify stage and camera
+      <code>pyueye</code> for IDS uEye — note that <strong>IDS cameras work on Windows only</strong> (the
+      IDS Software Suite has no macOS support), so pair IDS rigs with a Windows laptop. See
+      <a href="#software">Software installations</a> below for step-by-step instructions. With the environment active and the SDK in place, verify stage and camera
       connectivity:</p>
 <pre><code>python test_hardware.py</code></pre>
       <p>Or, to skip a vendor you don't have: <code>python test_hardware.py --camera ids</code> (IDS only —

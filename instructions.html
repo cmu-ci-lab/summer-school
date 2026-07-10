@@ -565,19 +565,21 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
       select and clear patches, zoom around the plot. Nothing you do here can break anything, and being
       fluent with the controls makes the alignment steps much faster.</p>
 
-      <h4>Anatomy of the visualizer</h4>
-      <figure><img src="instructions_media/viz_full.jpg" alt="The visualizer: live camera view on the left, coherence scan panel on the right, status bar along the bottom" width="640"></figure>
+      <h4>Visualizer</h4>
+      <figure><img src="instructions_media/viz_anatomy.jpg" alt="The visualizer with numbered red boxes: 1 live camera view, 2 stat tiles, 3 amplitude plot, 4 status bar, 5 selected patch" width="640">
+      <figcaption>The parts of the visualizer, numbered to match the list below.</figcaption></figure>
       <ul class="plain">
-        <li><strong>Left — live camera view.</strong> The raw camera feed. Click twice on it to select a
-        <em>patch</em> (first click anchors a corner, second finalizes); the blue box marks the patch being
-        tracked.</li>
-        <li><strong>Right — coherence scan panel.</strong> Three stat tiles up top:
-        <em>coherence FWHM</em> and <em>peak</em> (filled in once a full envelope has been swept through) and
-        the live <em>amplitude</em> of the selected patch. Below them, the plot builds up patch amplitude vs
-        stage position as the stage moves. Scroll the mouse wheel over it to zoom, drag to pan.</li>
-        <li><strong>Bottom — status bar.</strong> Exposure (µs), gamma, frame rate, and binning on the left;
-        the current stage position and the coarse&thinsp;/&thinsp;fine step sizes in the middle; key hints on
-        the right.</li>
+        <li><strong>① Live camera view.</strong> The raw camera feed. Click twice on it to select a
+        <em>patch</em> (first click anchors a corner, second finalizes).</li>
+        <li><strong>② Stat tiles.</strong> <em>Coherence FWHM</em> and <em>peak</em> (filled in once a full
+        envelope has been swept through) and the live <em>amplitude</em> of the selected patch.</li>
+        <li><strong>③ Coherence plot.</strong> Builds up patch amplitude vs stage position as the stage
+        moves. Scroll the mouse wheel over it to zoom, drag to pan.</li>
+        <li><strong>④ Status bar.</strong> Exposure (µs), gamma, frame rate, and binning on the left; the
+        current stage position and the coarse&thinsp;/&thinsp;fine step sizes in the middle; key hints on the
+        right.</li>
+        <li><strong>⑤ Selected patch.</strong> The blue box marks the patch whose interference amplitude the
+        panel is tracking.</li>
       </ul>
       <p><strong>Keyboard controls:</strong></p>
       <ul class="plain">
@@ -590,8 +592,9 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li><kbd>r</kbd> — reset the plot but keep the patch</li>
         <li><kbd>q</kbd> — quit</li>
       </ul>
-      <div class="note"><strong>Note:</strong> the exact layout may change a little as the tool evolves —
-      that's ok; the three pieces (live view, coherence panel, status bar) stay the same.</div>
+      <div class="warn"><strong>Disclaimer:</strong> the visualizer is subject to change — the exact layout,
+      labels, and controls may differ a little from the screenshots and videos in this guide. That's ok: the
+      pieces above (live view, stat tiles, plot, status bar) stay the same.</div>
     </section>
 
     <section class="step" id="a2">

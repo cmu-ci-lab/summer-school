@@ -57,13 +57,7 @@ MAX_POINTS = 5000         # cap on stored (position, amplitude) samples
 # the amplitude peak. Refuse to start if the estimate exceeds the time budget.
 AUTOFIND_MAX_MM = 25.0        # stage travel (Z825 / LTS150 short axis)
 AUTOFIND_BUDGET_S = 300       # 5 minutes
-# Frames to sit at each autofind step. 2 is the guaranteed minimum for an
-# amplitude sample: PatchAmplitude needs >=2 samples inside +/-window_mm, and
-# when the coarse step is wider than the window the previous step's samples
-# don't count — so frame 1 at a new position can return None and frame 2
-# produces the value. (Transit frames often fill the window sooner, but 2
-# keeps the every-step guarantee.)
-AUTOFIND_DWELL_FRAMES = 2
+AUTOFIND_DWELL_FRAMES = 3     # frames to sit at each step so the amplitude updates
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
 # Dark-surface palette validated for CVD separation and contrast (dataviz

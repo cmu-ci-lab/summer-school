@@ -18,6 +18,9 @@ Controls:
   click x2   : Select patch (first click anchors a corner, second finalizes)
   wheel      : (over the plot) zoom the position axis around the cursor
   left-drag  : (over the plot) pan the position axis
+  f          : Autofind — stepped sweep 0 → 25 mm at the coarse step, then
+               move to the amplitude peak (needs a patch; f again cancels;
+               refuses to start if the estimate exceeds 5 minutes)
   a          : Autoscale the plot (undo zoom/pan)
   c          : Clear the patch selection and the plot
   r          : Reset (clear) the plot data but keep the patch
@@ -49,6 +52,12 @@ DOWN_KEYS = {63233, 65364, 2621440, 84}
 FINE_RATIO = 10
 
 MAX_POINTS = 5000         # cap on stored (position, amplitude) samples
+
+# Autofind ('f'): sweep the full stage travel at the coarse step, then move to
+# the amplitude peak. Refuse to start if the estimate exceeds the time budget.
+AUTOFIND_MAX_MM = 25.0        # stage travel (Z825 / LTS150 short axis)
+AUTOFIND_BUDGET_S = 300       # 5 minutes
+AUTOFIND_DWELL_FRAMES = 3     # frames to sit at each step so the amplitude updates
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
 # Dark-surface palette validated for CVD separation and contrast (dataviz
@@ -695,8 +704,12 @@ def render_panel(txt, points, height, live_val=None, current_pos=None,
 
 
 def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
-                  pos_mm, moving, coarse_mm):
-    """Full-width bottom status bar: camera stats left, stage centre, keys right."""
+                  pos_mm, moving, coarse_mm, banner=None):
+    """Full-width bottom status bar: camera stats left, stage centre, keys right.
+
+    `banner` is an optional (text, color) that replaces the centre stage text —
+    used for autofind progress and transient notices.
+    """
     bar = np.full((STATUS_H, width, 3), SURFACE_2, np.uint8)
     cv2.line(bar, (0, 0), (width, 0), GRID, 1)
     cy = STATUS_H // 2
@@ -709,7 +722,9 @@ def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
     txt.put((20, cy + 13), "press  −  to dim   /   +  to brighten  (exposure)",
             12, TEXT_MUTED, "medium", anchor="lm")
 
-    if stage_ok:
+    if banner is not None:
+        stage_s, color = banner
+    elif stage_ok:
         pos_s = f"{pos_mm:.4f} mm" if pos_mm is not None else "—"
         stage_s = f"stage {pos_s}    step {coarse_mm:g} / {coarse_mm / FINE_RATIO:g} mm"
         color = LIVE if moving else TEXT_1
@@ -719,7 +734,7 @@ def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
         stage_s, color = "stage not found — camera only", TEXT_MUTED
     txt.put((width // 2, cy), stage_s, 16, color, "demi", anchor="mm")
 
-    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   c clear   a fit   q quit",
+    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   f find   c clear   a fit   q quit",
             14, TEXT_2, "medium", anchor="rm")
     return bar
 
@@ -842,6 +857,11 @@ def main():
     # arrays + FWHM against it so they aren't recomputed every frame.
     samples_version = 0
     panel_cache = {}
+    # Autofind ('f'): non-blocking stepped sweep 0 → AUTOFIND_MAX_MM at the
+    # coarse step, then move to the amplitude peak. Runs as a state machine
+    # inside the main loop so the preview keeps streaming and f cancels.
+    autofind = None      # {"targets": [...], "i": int, "dwell": int} or None
+    notice = None        # transient status-bar message: (text, expires_at)
     # plot_view["range"]: (xmin, xmax) zoom of the plot, None = auto-fit.
     # plot_view["drawn"]: the range actually rendered last frame (needed to map
     # panel pixels back to data coordinates for wheel-zoom / drag-pan).
@@ -995,6 +1015,41 @@ def main():
                             samples_version += 1
                         last_coord = coord
 
+            # ── Autofind state machine: step, dwell, advance; finish at peak ──
+            if autofind is not None and stage is not None:
+                tgt = autofind["targets"][autofind["i"]]
+                arrived = (pos_mm is not None and not moving
+                           and abs(pos_mm - tgt) < max(coarse_mm / 4, 5e-4))
+                if arrived:
+                    autofind["dwell"] += 1
+                    # Sit a few frames so PatchAmplitude gets >=2 in-window
+                    # samples and the amplitude at this step is recorded.
+                    if autofind["dwell"] >= AUTOFIND_DWELL_FRAMES:
+                        autofind["i"] += 1
+                        autofind["dwell"] = 0
+                        try:
+                            if autofind["i"] < len(autofind["targets"]):
+                                stage.move_to(autofind["targets"][autofind["i"]],
+                                              wait=False)
+                            else:
+                                # Sweep done — go to the amplitude peak.
+                                if samples:
+                                    peak_pos = max(samples.values(),
+                                                   key=lambda pv: pv[1])[0]
+                                    stage.move_to(peak_pos, wait=False)
+                                    notice = (f"autofind: peak at {peak_pos:.4f} mm"
+                                              " — moving there", now + 6)
+                                    print(f"Autofind: peak amplitude at "
+                                          f"{peak_pos:.4f} mm; moving there.")
+                                else:
+                                    notice = ("autofind: no samples collected",
+                                              now + 5)
+                                plot_view["range"] = None
+                                autofind = None
+                        except Exception as e:
+                            print(f"Autofind move failed: {e}")
+                            autofind = None
+
             # Scale down to fit the screen while preserving aspect ratio.
             # Resize the single-channel image, THEN expand to BGR — at full
             # sensor resolution this is 3x less data through the resize.
@@ -1043,10 +1098,22 @@ def main():
                                         version=samples_version)
             plot_view["drawn"] = drawn
             canvas = np.hstack([frame_rgb, panel])
+            # Status-bar banner: autofind progress, or a transient notice.
+            if notice is not None and now >= notice[1]:
+                notice = None
+            if autofind is not None:
+                banner = (f"AUTOFIND  {autofind['i'] + 1}/{len(autofind['targets'])}"
+                          f"   target {autofind['targets'][autofind['i']]:.3f} mm"
+                          "   (f cancels)", ACCENT)
+            elif notice is not None:
+                banner = (notice[0], ACCENT)
+            else:
+                banner = None
+
             txt.origin = (0, frame_rgb.shape[0])
             bar = render_status(txt, canvas.shape[1], exposure_us, gamma, fps,
                                 live_binning, stage is not None, pos_mm,
-                                moving, coarse_mm)
+                                moving, coarse_mm, banner=banner)
             canvas = np.vstack([canvas, bar])
             txt.origin = (0, 0)
             canvas = txt.flush(canvas)
@@ -1070,6 +1137,50 @@ def main():
                     move_stage(+1, fine=True)
                 elif k == ord('d'):
                     move_stage(-1, fine=True)
+                elif k == ord('f'):
+                    if autofind is not None:
+                        autofind = None
+                        notice = ("autofind cancelled", now + 3)
+                        print("Autofind cancelled.")
+                    elif stage is None:
+                        notice = ("autofind needs a stage", now + 4)
+                    elif selector.rect is None:
+                        notice = ("autofind: select a patch first (two clicks)",
+                                  now + 4)
+                    else:
+                        n_steps = int(AUTOFIND_MAX_MM / coarse_mm) + 1
+                        # Time estimate: dwell frames + ~0.2 s move/settle
+                        # per step (short KDC101 moves are dominated by
+                        # settling, not travel).
+                        est_s = n_steps * (AUTOFIND_DWELL_FRAMES
+                                           / max(fps, 1.0) + 0.2)
+                        if est_s > AUTOFIND_BUDGET_S:
+                            notice = (f"autofind would take too long "
+                                      f"(~{est_s / 60:.0f} min at step "
+                                      f"{coarse_mm:g} mm) — increase the step "
+                                      "with ]", now + 6)
+                            print(f"Autofind refused: ~{est_s / 60:.1f} min at "
+                                  f"step {coarse_mm:g} mm exceeds the "
+                                  f"{AUTOFIND_BUDGET_S / 60:.0f} min budget. "
+                                  "Increase the coarse step with ] and retry.")
+                        else:
+                            samples.clear()
+                            samples_version += 1
+                            amp.reset()
+                            last_coord = None
+                            plot_view["range"] = None
+                            autofind = {"targets": [i * coarse_mm
+                                                    for i in range(n_steps)],
+                                        "i": 0, "dwell": 0}
+                            try:
+                                stage.move_to(0.0, wait=False)
+                                print(f"Autofind: sweeping 0 → "
+                                      f"{AUTOFIND_MAX_MM:g} mm in {n_steps} "
+                                      f"steps of {coarse_mm:g} mm "
+                                      f"(est ≥{est_s:.0f}s). Press f to cancel.")
+                            except Exception as e:
+                                print(f"Autofind start failed: {e}")
+                                autofind = None
                 elif k == ord('c'):
                     selector.clear()
                     amp.reset()
@@ -1079,6 +1190,7 @@ def main():
                     fallback_idx = 0
                     live_val = None
                     plot_view["range"] = None
+                    autofind = None
                     print("Patch selection cleared.")
                 elif k == ord('r'):
                     samples.clear()

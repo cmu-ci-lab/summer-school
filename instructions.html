@@ -260,7 +260,13 @@
     interference fringes, and use it as a time-domain OCT scanner to recover a depth map of a coin.</p>
     <p><strong>Where this is going:</strong> by the end of this guide you will have built a scanner that
     can map a surface down to <strong>micron scale</strong> — the depth map below, and the transient video of
-    the coherence gate sweeping across a coin, are both produced by the instrument you're about to build:</p>
+    the coherence gate sweeping across a coin, are both produced by the instrument you're about to build.</p>
+    <p><strong>The setup you will build</strong> — a Michelson interferometer on a breadboard. Light from the
+    LED is split at the beamsplitter into two arms — the reference mirror on the motorized stage, and the
+    object (a mirror at first, later your coin) on the XY stage — and recombines into the camera:</p>
+    <figure><img src="instructions_media/setup_labelled.jpg" alt="Top-down labelled photo of the interferometer: LED and telescoping tube, camera and lens, beamsplitter on rotation stage, object mirror on XY stage, reference mirror on motorized stage, LED driver, KDC101 controller" width="760">
+    <figcaption>The assembled instrument, with every part you will mount and align labelled.</figcaption></figure>
+    <p><strong>The results</strong> — what this instrument measures:</p>
     <div style="display:flex;flex-wrap:nowrap;gap:14px;align-items:flex-start;margin:12px 0">
       <figure style="flex:1.157 1 0;min-width:0;margin:0"><img src="instructions_media/depth_correct.jpg" style="width:100%;height:auto" alt="Teaser: micron-scale OCT depth map of a coin">
       <figcaption>A micron-scale depth map of a coin, recovered by your scanner.</figcaption></figure>

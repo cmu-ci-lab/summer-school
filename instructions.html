@@ -425,10 +425,23 @@
       then run:</p>
 <pre><code><span class="cm"># one-time setup (see Software installations below for details)</span>
 git clone https://github.com/cmu-ci-lab/summer-school.git
-cd summer-school
-./setup.sh
-<span class="cm"># — or, if you'd rather not run the script and have conda already:</span>
-conda env create -f environment.yml</code></pre>
+cd summer-school</code></pre>
+      <p>Then build the Python environment. Pick <strong>one</strong> of the three options below (see
+      <a href="#software">Software installations</a> for the full details):</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin:12px 0">
+        <div style="flex:1 1 220px;min-width:0;border:1px solid var(--line);border-top:3px solid var(--green);border-radius:10px;padding:12px 14px;background:var(--surface)">
+          <p style="margin:0 0 6px"><strong style="color:var(--green)">Option 1 — Recommended</strong><br>Let the script decide (conda if you have it, else a <code>.venv</code>):</p>
+<pre style="margin:0"><code>./setup.sh</code></pre>
+        </div>
+        <div style="flex:1 1 220px;min-width:0;border:1px solid var(--line);border-top:3px solid var(--violet);border-radius:10px;padding:12px 14px;background:var(--surface)">
+          <p style="margin:0 0 6px"><strong style="color:var(--violet)">Option 2 — Don't want conda?</strong><br>Force a plain <code>.venv</code>, even if conda is installed:</p>
+<pre style="margin:0"><code>FORCE_VENV=1 ./setup.sh</code></pre>
+        </div>
+        <div style="flex:1 1 220px;min-width:0;border:1px solid var(--line);border-top:3px solid var(--blue);border-radius:10px;padding:12px 14px;background:var(--surface)">
+          <p style="margin:0 0 6px"><strong style="color:var(--blue)">Option 3 — Manual conda</strong><br>Skip the script and build the env yourself (needs conda):</p>
+<pre style="margin:0"><code>conda env create -f environment.yml</code></pre>
+        </div>
+      </div>
       <p>Then activate the environment. <strong>Which command you use depends on which kind of
       environment <code>setup.sh</code> built</strong> — it prints the right one when it finishes
       (conda is preferred when you have it; otherwise it creates a <code>.venv</code>):</p>
@@ -455,11 +468,19 @@ conda env create -f environment.yml</code></pre>
       rig: the Vimba&nbsp;X SDK (vmbpy wheel) for Allied Vision, or the IDS Software Suite plus
       <code>pyueye</code> for IDS uEye — note that <strong>IDS cameras work on Windows only</strong> (the
       IDS Software Suite has no macOS support), so pair IDS rigs with a Windows laptop. See
-      <a href="#software">Software installations</a> below for step-by-step instructions. With the environment active and the SDK in place, verify stage and camera
+      <a href="#software">Software installations</a> below for step-by-step instructions.</p>
+      <div class="warn"><strong>Caution (macOS):</strong> the Vimba&nbsp;X installer package may be blocked
+      by macOS when you run it. If that happens, open <em>System Settings → Privacy&nbsp;&amp;&nbsp;Security</em>,
+      scroll down to the message about the blocked installer, and click <em>Open&nbsp;Anyway</em> to allow it
+      to run.</div>
+      <p>With the environment active and the SDK in place, verify stage and camera
       connectivity:</p>
 <pre><code>python test_hardware.py</code></pre>
       <p>Or, to skip a vendor you don't have: <code>python test_hardware.py --camera ids</code> (IDS only —
       skips the Vimba&nbsp;X check) or <code>--camera avt</code> (Allied Vision only).</p>
+      <div class="warn"><strong>Caution:</strong> if you're using an Allied Vision camera, you will need to
+      <code>pip</code> install the <code>vmbpy</code> package. <code>test_hardware.py</code> will
+      automatically prompt you with instructions to do so.</div>
       <p>The stage test connects, reads the position, <strong>moves +5&nbsp;mm and back</strong>, and verifies
       the readback — so make sure the stage has 5&nbsp;mm of clearance before you run it. The camera test
       connects, grabs a frame, buffers three more, and writes a small stack to <code>test_captures/</code>.</p>

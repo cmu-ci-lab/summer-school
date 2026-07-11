@@ -587,6 +587,8 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li><kbd>e</kbd>&thinsp;/&thinsp;<kbd>d</kbd> — jog forward/back by the <em>fine</em> step (coarse ÷ 10); hold <kbd>e</kbd> for a slow sweep</li>
         <li><kbd>[</kbd>&thinsp;/&thinsp;<kbd>]</kbd> — halve / double the coarse step size</li>
         <li><kbd>+</kbd>&thinsp;/&thinsp;<kbd>-</kbd> — brighten / dim (exposure)</li>
+        <li><kbd>f</kbd> — <em>autofind</em>: automatically sweeps the full stage travel at the coarse step,
+        then moves to the peak it found <span class="ph">(experimental — keep an eye on it)</span></li>
         <li><kbd>a</kbd> — autoscale the plot (undo zoom/pan)</li>
         <li><kbd>c</kbd> — clear the patch selection <em>and</em> the plot</li>
         <li><kbd>r</kbd> — reset the plot but keep the patch</li>
@@ -722,11 +724,6 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             <figcaption><span class="vid-badge">video</span>Changing the lens focusing — turn the focus ring
             on the Nikon lens.</figcaption>
           </figure>
-          <figure>
-            <video src="instructions_media/viz_focus_1to1.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
-            <figcaption><span class="vid-badge">video</span>Bringing the mirror surface into focus at about
-            1:1 — watch the dust and scratches on the glass sharpen up.</figcaption>
-          </figure>
           <p>You will need to increase the exposure time and/or LED power.</p>
         </li>
         <li>Use the mirror itself to help with focusing.
@@ -765,7 +762,10 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         </li>
         <li>Do a <strong>full sweep</strong> of the stage: move it close to 0&nbsp;mm, then <em>hold</em>
         <kbd>w</kbd> to sweep continuously all the way up to ~25&nbsp;mm (the end of travel). Use a step that
-        is neither too small nor too large — around 0.3–0.5&nbsp;mm. Too small and the sweep takes forever;
+        is neither too small nor too large — around 0.3–0.5&nbsp;mm.
+          <div class="note"><strong>Shortcut:</strong> pressing <kbd>f</kbd> does this full sweep for you
+          (autofind) and moves to the peak it found — but it's <em>experimental</em>, so keep an eye on it
+          and fall back to sweeping manually if it misbehaves.</div> Too small and the sweep takes forever;
         too large and you can step clean over the region where the interference appears. Somewhere along the
         sweep the pathlengths match: you will see the fringes appear in the live view, and a
         <strong>sharp peak</strong> in the panel.

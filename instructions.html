@@ -601,61 +601,6 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
 
     <section class="step" id="a2">
       <h3><span class="step-num">4</span>Collimating the LED</h3>
-      <div class="theory">
-        <p class="theory-title">Why collimate — what the two lens settings mean</p>
-        <p>There are two lenses in play: the <em>telescoping tube</em> on the LED, and the <em>camera
-        lens</em>. Collimating means sliding the LED to the tube lens's focal plane, so every point of the
-        LED leaves as a bundle of <strong>parallel rays</strong> — light "from infinity". A camera lens whose
-        focus ring is set to <strong>∞</strong> brings parallel rays back to a point, so the LED's active
-        element snaps into focus exactly when the collimation is right — that's what you're judging on
-        screen. Later (OCT part), the same camera lens is refocused to <strong>~1:1</strong> so the
-        <em>mirror/coin surface</em> is sharp instead:</p>
-        <svg viewBox="0 0 640 300" width="640" style="max-width:100%;height:auto;display:block;margin:10px auto"
-             font-size="12" text-anchor="middle">
-          <!-- row 1: collimation + infinity focus -->
-          <text x="320" y="16" font-weight="bold" fill="#7a9ae0">Alignment: collimated LED + camera focused at ∞</text>
-          <line x1="20" y1="72" x2="620" y2="72" stroke="#555" stroke-dasharray="3 5"/>
-          <circle cx="60" cy="72" r="4" fill="#e0b34d"/>
-          <text x="60" y="122" fill="#999">LED at the tube</text>
-          <text x="60" y="136" fill="#999">lens's focal plane</text>
-          <ellipse cx="150" cy="72" rx="9" ry="40" fill="rgba(122,154,224,.25)" stroke="#7a9ae0"/>
-          <line x1="60" y1="72" x2="150" y2="36" stroke="#e0b34d"/>
-          <line x1="60" y1="72" x2="150" y2="72" stroke="#e0b34d"/>
-          <line x1="60" y1="72" x2="150" y2="108" stroke="#e0b34d"/>
-          <line x1="150" y1="36" x2="420" y2="36" stroke="#e0b34d"/>
-          <line x1="150" y1="72" x2="420" y2="72" stroke="#e0b34d"/>
-          <line x1="150" y1="108" x2="420" y2="108" stroke="#e0b34d"/>
-          <text x="285" y="30" fill="#999">parallel rays ("at infinity")</text>
-          <ellipse cx="420" cy="72" rx="9" ry="40" fill="rgba(122,154,224,.25)" stroke="#7a9ae0"/>
-          <text x="420" y="132" fill="#999">camera lens, ring at ∞</text>
-          <line x1="420" y1="36" x2="540" y2="72" stroke="#e0b34d"/>
-          <line x1="420" y1="72" x2="540" y2="72" stroke="#e0b34d"/>
-          <line x1="420" y1="108" x2="540" y2="72" stroke="#e0b34d"/>
-          <line x1="545" y1="40" x2="545" y2="104" stroke="#bbb" stroke-width="3"/>
-          <text x="580" y="76" fill="#999">sensor</text>
-          <!-- row 2: ~1:1 focusing -->
-          <text x="320" y="176" font-weight="bold" fill="#7a9ae0">OCT: camera refocused to ~1:1 on the mirror / coin surface</text>
-          <line x1="20" y1="238" x2="620" y2="238" stroke="#555" stroke-dasharray="3 5"/>
-          <line x1="60" y1="200" x2="60" y2="276" stroke="#bbb" stroke-width="3"/>
-          <line x1="60" y1="238" x2="60" y2="210" stroke="#e0b34d" stroke-width="2"/>
-          <circle cx="60" cy="210" r="3" fill="#e0b34d"/>
-          <text x="60" y="292" fill="#999">mirror / coin surface</text>
-          <ellipse cx="300" cy="238" rx="9" ry="40" fill="rgba(122,154,224,.25)" stroke="#7a9ae0"/>
-          <text x="300" y="292" fill="#999">same lens, ring near 1:1</text>
-          <line x1="60" y1="210" x2="300" y2="210" stroke="#e0b34d"/>
-          <line x1="300" y1="210" x2="540" y2="266" stroke="#e0b34d"/>
-          <line x1="60" y1="210" x2="540" y2="266" stroke="#e0b34d"/>
-          <line x1="545" y1="206" x2="545" y2="270" stroke="#bbb" stroke-width="3"/>
-          <line x1="540" y1="238" x2="540" y2="266" stroke="#e0b34d" stroke-width="2"/>
-          <circle cx="540" cy="266" r="3" fill="#e0b34d"/>
-          <text x="583" y="242" fill="#999">sensor</text>
-          <text x="300" y="228" fill="#999">object ≈ image distance → magnification ≈ 1</text>
-        </svg>
-        <p>Why bother? Collimated light means the two arms see the same flat wavefront, so any pathlength
-        difference comes purely from the arm lengths — which is exactly the quantity the stage will scan.
-        And at ~1:1 magnification, one camera pixel corresponds to one pixel-sized patch of the surface,
-        which is what lets the depth map's lateral scale be read straight off the sensor's pixel pitch.</p>
-      </div>
       <ol class="sub">
         <li>Set the lens to infinity focusing.
           <figure>
@@ -723,6 +668,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             <video src="instructions_media/hw_zoom_lens.mp4" controls muted loop playsinline preload="metadata" width="300"></video>
             <figcaption><span class="vid-badge">video</span>Changing the lens focusing — turn the focus ring
             on the Nikon lens.</figcaption>
+          </figure>
+          <figure>
+            <video src="instructions_media/viz_focus_1to1.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
+            <figcaption><span class="vid-badge">video</span>Bringing the mirror surface into focus at about
+            1:1 — watch the dust and scratches on the glass sharpen up.</figcaption>
           </figure>
           <p>You will need to increase the exposure time and/or LED power.</p>
         </li>

@@ -20,3 +20,4 @@ live_view_captures/
 .DS_Store
 last_exposure.json
 last_patch.json
+oct_crop_scans/

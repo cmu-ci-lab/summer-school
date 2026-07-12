@@ -160,6 +160,39 @@ class IDSCamera:
                                 ueye.IS_IGNORE_PARAMETER,
                                 ueye.IS_IGNORE_PARAMETER)
 
+    def set_roi(self, x: int, y: int, w: int, h: int):
+        """Crop the sensor readout to a region (fast readout for small ROIs).
+
+        Coordinates are snapped to the uEye AOI grid (x/width multiples of 8,
+        y/height multiples of 2). The image memory is reallocated for the new
+        size. Returns the actual (x, y, w, h) applied. A fresh connect()
+        resets the camera to full frame (uEye re-inits to defaults).
+        """
+        if self._hcam is None:
+            raise RuntimeError("Camera not connected. Call connect() first.")
+        x, w = (x // 8) * 8, max((w // 8) * 8, 8)
+        y, h = (y // 2) * 2, max((h // 2) * 2, 2)
+
+        rect = ueye.IS_RECT()
+        rect.s32X, rect.s32Y = ueye.int(x), ueye.int(y)
+        rect.s32Width, rect.s32Height = ueye.int(w), ueye.int(h)
+        ret = ueye.is_AOI(self._hcam, ueye.IS_AOI_IMAGE_SET_AOI,
+                          rect, ueye.sizeof(rect))
+        if ret != ueye.IS_SUCCESS:
+            raise RuntimeError(f"is_AOI failed (code {ret}) for "
+                               f"x={x} y={y} w={w} h={h}.")
+
+        # Reallocate image memory for the new frame size.
+        ueye.is_FreeImageMem(self._hcam, self._mem_ptr, self._mem_id)
+        self._width, self._height = w, h
+        self._mem_ptr = ueye.c_mem_p()
+        self._mem_id = ueye.int()
+        ueye.is_AllocImageMem(self._hcam, self._width, self._height,
+                              self._bits_per_pixel, self._mem_ptr, self._mem_id)
+        ueye.is_SetImageMem(self._hcam, self._mem_ptr, self._mem_id)
+        print(f"ROI: x={x} y={y} {w}x{h}")
+        return x, y, w, h
+
     # ------------------------------------------------------------------
     # Capture
     # ------------------------------------------------------------------

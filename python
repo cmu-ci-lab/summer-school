@@ -13,7 +13,9 @@ if [ "$(basename "${CONDA_PREFIX:-}")" = "iccp-oct" ]; then
     exec "$CONDA_PREFIX/bin/python" "$@"
 fi
 here="$(cd "$(dirname "$0")" && pwd)"
-if [ -x "$here/.venv/bin/python" ]; then
+# Use the project .venv only if it's actually provisioned (a half-built venv
+# from an interrupted setup.sh shouldn't shadow a working conda env).
+if [ -x "$here/.venv/bin/python" ] && "$here/.venv/bin/python" -c "import numpy" >/dev/null 2>&1; then
     exec "$here/.venv/bin/python" "$@"
 fi
 candidates=()

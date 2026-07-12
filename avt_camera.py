@@ -281,6 +281,33 @@ class AVTCamera:
     # Settings
     # ------------------------------------------------------------------
 
+    def set_roi(self, x: int, y: int, w: int, h: int):
+        """Crop the sensor readout to a region (fast readout for small ROIs).
+
+        Values are snapped to each feature's increment and clamped to its
+        range. Returns the actual (x, y, w, h) applied. connect() resets the
+        camera to full frame, so a crop never leaks into the next script.
+        """
+        def snap(feat, val):
+            lo, hi = feat.get_range()
+            inc = feat.get_increment() or 1
+            return int(min(max(lo, (val // inc) * inc), hi))
+
+        # Offsets to 0 first so the new Width/Height can't collide with the
+        # old offsets, then size, then place.
+        self._cam.OffsetX.set(0)
+        self._cam.OffsetY.set(0)
+        w = snap(self._cam.Width, w)
+        h = snap(self._cam.Height, h)
+        self._cam.Width.set(w)
+        self._cam.Height.set(h)
+        x = snap(self._cam.OffsetX, x)
+        y = snap(self._cam.OffsetY, y)
+        self._cam.OffsetX.set(x)
+        self._cam.OffsetY.set(y)
+        print(f"ROI: x={x} y={y} {w}x{h}")
+        return x, y, w, h
+
     def _set_feature(self, *names, value):
         """Try feature names in order; raises if none exist on this camera."""
         for name in names:
@@ -334,10 +361,18 @@ class AVTCamera:
             pass
 
     def _apply_settings(self):
-        # Binning persists in the camera across disconnects, so always start
-        # from full resolution. Callers (e.g. live_view) opt into binning after
-        # connect(); every other script gets a clean full-res sensor.
+        # Binning and ROI persist in the camera across disconnects, so always
+        # start from full resolution/full frame. Callers (e.g. oct_crop_scan)
+        # opt into binning or a crop after connect(); every other script gets
+        # a clean full-frame sensor.
         self.set_binning(1, mode=None, verbose=False)
+        try:
+            self._cam.OffsetX.set(0)
+            self._cam.OffsetY.set(0)
+            self._cam.Width.set(self._cam.Width.get_range()[1])
+            self._cam.Height.set(self._cam.Height.get_range()[1])
+        except Exception:
+            pass   # not all cameras expose ROI features
 
         self._set_best_mono_pixel_format()
 

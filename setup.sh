@@ -119,6 +119,12 @@ else
     numpy==2.4.6 scipy==1.18.0 matplotlib==3.11.0 Pillow==12.2.0 \
     pyserial==3.5 pylablib==1.4.5 pyftdi \
     opencv-python ipykernel
+  # pylablib's Kinesis backend on Windows/Linux is pyft232 (ftd2xx / libftdi).
+  # Without it list_kinesis_devices() finds nothing even with the driver OK.
+  # Deliberately NOT installed on macOS (broken there — pyftdi is used instead).
+  if [ "$OS" != "mac" ]; then
+    "$PIP" install pyft232
+  fi
 fi
 echo "Python   : $PYTHON"
 
@@ -201,6 +207,26 @@ if [ "$OS" = "mac" ]; then
   fi
   "$PIP" install pyftdi
   echo "macOS stage backend ready (pyftdi over libusb)."
+fi
+
+# ── 4c. Windows: stage backend (pyft232 + Kinesis/APT driver check) ───────────
+# pylablib finds the KDC101 through pyft232, which binds FTDI's ftd2xx.dll —
+# installed by the Thorlabs Kinesis (or legacy APT) installer. setup.sh cannot
+# install a system driver itself, so check for the DLL and say so loudly.
+if [ "$OS" = "windows" ]; then
+  echo ""
+  echo "Installing Windows stage backend (pyft232)..."
+  "$PIP" install pyft232
+  if [ -f "/c/Windows/System32/ftd2xx.dll" ] || [ -f "/c/Windows/System32/ftd2xx64.dll" ] \
+     || [ -f "/c/Windows/SysWOW64/ftd2xx.dll" ]; then
+    echo "Kinesis/APT driver found (ftd2xx.dll) — stage backend ready."
+  else
+    echo "WARNING: ftd2xx.dll not found — the Thorlabs Kinesis driver is NOT installed."
+    echo "  Without it the KDC101 stage cannot be detected, even though pyft232 is."
+    echo "  Download and run the Kinesis installer (64-bit) from:"
+    echo "    https://www.thorlabs.com/software_pages/ViewSoftwarePage.cfm?Code=Motion_Control"
+    echo "  Then unplug/replug the KDC101 USB cable and re-run: python test_hardware.py"
+  fi
 fi
 
 # ── 5. Register Jupyter kernel ────────────────────────────────────────────────

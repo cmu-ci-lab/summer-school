@@ -15,6 +15,10 @@ dependencies:
       - pyserial==3.5
       - pylablib==1.4.5
       - pyftdi
+      # pylablib's Kinesis (KDC101) backend on Windows/Linux — binds ftd2xx.
+      # Not on macOS: pylablib's ft232 backend is broken there (stage.py uses
+      # pyftdi over libusb instead).
+      - pyft232; sys_platform != "darwin"
 
       # Camera SDKs are deliberately NOT part of the base environment — which
       # camera is used gets decided later. Install per vendor (see docs.html

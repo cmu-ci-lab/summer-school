@@ -624,8 +624,9 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         are; <kbd>Esc</kbd> cancels). Handy for jumping straight back to a centre you found earlier</li>
         <li><kbd>+</kbd>&thinsp;/&thinsp;<kbd>-</kbd> — brighten / dim (exposure)</li>
         <li><kbd>f</kbd> — <em>fine scan</em>: once you have coarsely found the peak, steps ±0.5&nbsp;mm around
-        the current position in 40&nbsp;µm steps, saves a contrast-vs-position plot (PNG + CSV) and moves the
-        stage to the peak <span class="ph">(experimental — keep an eye on it)</span></li>
+        the current position in 10&nbsp;µm steps (the plot resets as the sweep begins), saves a
+        contrast-vs-position plot (PNG + CSV) and moves the stage to the peak
+        <span class="ph">(experimental — keep an eye on it)</span></li>
         <li><kbd>a</kbd> — autoscale the plot (undo zoom/pan)</li>
         <li><kbd>c</kbd> — clear the patch selection <em>and</em> the plot</li>
         <li><kbd>r</kbd> — reset the plot but keep the patch</li>
@@ -838,11 +839,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         ‘center’ position around which we will perform the scan.
           <div class="note"><strong>Refine it automatically:</strong> once the manual sweep has the peak
           roughly in view, press <kbd>f</kbd> (with a patch selected) for a <em>fine scan</em> — it steps
-          ±0.5&nbsp;mm around the current position in 40&nbsp;µm steps, measuring the contrast of your patch
+          ±0.5&nbsp;mm around the current position in 10&nbsp;µm steps, measuring the contrast of your patch
           at each step, then <strong>moves the stage to the peak</strong> and saves a contrast-vs-position
           plot to <code>live_view_captures/</code> (a PNG plus the raw CSV). The plot also reports the
           <strong>coherence length</strong> — the FWHM of the envelope. Use the peak it reports as your
-          ‘center’. It takes about 20&nbsp;s; <kbd>f</kbd> again cancels. It needs you to already be within
+          ‘center’. It takes under a minute; <kbd>f</kbd> again cancels. It needs you to already be within
           ~0.5&nbsp;mm of the peak, so it refines the manual sweep rather than replacing it, and it is still
           <strong>experimental</strong> — keep an eye on it.</div>
           <div class="note"><strong>Going back to a position later:</strong> write the centre down. Inside the

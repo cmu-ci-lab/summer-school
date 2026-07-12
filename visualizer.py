@@ -71,7 +71,7 @@ MAX_POINTS = 5000         # cap on stored (position, amplitude) samples
 # at each step. Ends by saving a contrast-vs-position plot and moving the stage
 # to the coherence peak.
 FINE_RANGE_MM = 0.5           # half-width of the sweep (+/- this around the current position)
-FINE_STEP_MM = 0.04           # 40 um
+FINE_STEP_MM = 0.010          # 10 um
 FINE_DWELL_FRAMES = 4         # frames averaged at each step (stage parked, so this is free)
 FINE_MIN_STEPS = 5            # compute_fwhm needs >= 5 points to find an envelope
 FINE_STALL_FRAMES = 150       # ~5 s: give up on a target the stage never quite reaches
@@ -953,7 +953,8 @@ def main():
                              "a 1 mm sweep)")
     parser.add_argument("--fine-step-mm", type=float, default=FINE_STEP_MM,
                         help="step size in mm of the 'f' fine scan "
-                             f"(default {FINE_STEP_MM:g} = 40 um)")
+                             f"(default {FINE_STEP_MM:g} = "
+                             f"{FINE_STEP_MM * 1000:g} um)")
     args = parser.parse_args()
     gamma = args.gamma
     fine_range, fine_step = args.fine_range_mm, args.fine_step_mm
@@ -1070,22 +1071,21 @@ def main():
     disp_state = {"scale": 1.0, "img_w": 0, "img_h": 0}
 
     def start_scan(targets, step):
-        """Clear the plot and begin a stepped sweep. Returns the state, or None.
+        """Begin a stepped sweep. Returns the state, or None.
+
+        The plot is NOT cleared here: it is reset when the stage ARRIVES at
+        the first target (see the state machine), so the transit from the
+        current position doesn't repopulate the panel with stray points
+        before the scan proper starts.
 
         `tol` is stored per-scan and derived from THIS scan's step: the arrival
         test must not be scaled by the coarse jog step, which can be an order of
         magnitude larger than a fine step (every target would then read as
         "arrived" immediately and the sweep would record garbage).
         """
-        nonlocal samples_version, last_coord, live_val
-        samples.clear()               # the panel then shows only the fine curve
-        samples_version += 1          # render_panel's cache keys off this
-        amp.reset()
-        last_coord = None
-        live_val = None
-        plot_view["range"] = None
         st = {"targets": targets, "i": 0, "dwell": 0, "stall": 0, "step": step,
               "tol": max(step / 4, 5e-4),
+              "cleared": False,       # plot reset happens on ARRIVAL at step 1
               "acc": [],              # live values seen during the current dwell
               "values": []}           # one (position, contrast) per completed step
         try:
@@ -1301,6 +1301,16 @@ def main():
                            and abs(pos_mm - tgt) < scan["tol"])
                 scan["stall"] = 0 if arrived else scan["stall"] + 1
                 if arrived:
+                    if not scan["cleared"]:
+                        # Reset the plot right as the sweep proper begins, so
+                        # transit samples from the drive-to-start don't mix in.
+                        samples.clear()
+                        samples_version += 1
+                        amp.reset()
+                        last_coord = None
+                        live_val = None
+                        plot_view["range"] = None
+                        scan["cleared"] = True
                     scan["dwell"] += 1
                     if live_val is not None:
                         scan["acc"].append(live_val)

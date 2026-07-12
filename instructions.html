@@ -429,6 +429,10 @@
       <p>Before touching any optics, make sure the laptop can actually talk to the stage and the camera.
       Plug in the KDC101's USB cable, switch it on with the red switch, connect the camera's USB cable,
       then run:</p>
+      <div class="note"><strong>Windows:</strong> install the
+      <a href="https://www.thorlabs.com/software-pages/motion_control">Thorlabs Kinesis software</a> first —
+      it provides the APT/FTDI driver the stage is detected through; without it the stage test will fail even
+      though everything else is set up correctly. (See the Software installations section below.)</div>
 <pre><code><span class="cm"># one-time setup (see Software installations below for details)</span>
 git clone https://github.com/cmu-ci-lab/summer-school.git
 cd summer-school</code></pre>
@@ -593,7 +597,7 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
       fluent with the controls makes the alignment steps much faster.</p>
 
       <h4>Visualizer</h4>
-      <figure><img src="instructions_media/viz_anatomy.jpg" alt="The visualizer with numbered red boxes: 1 live camera view, 2 stat tiles, 3 amplitude plot, 4 status bar, 5 selected patch" width="640">
+      <figure><img src="instructions_media/viz_anatomy.jpg" alt="The visualizer with numbered red boxes: 1 live camera view, 2 stat tiles, 3 coherence plot, 4 status bar, 5 selected patch and its magnified inset" width="640">
       <figcaption>The parts of the visualizer, numbered to match the list below.</figcaption></figure>
       <ul class="plain">
         <li><strong>① Live camera view.</strong> The raw camera feed. Click twice on it to select a
@@ -625,10 +629,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li><kbd>+</kbd>&thinsp;/&thinsp;<kbd>-</kbd> — brighten / dim (exposure)</li>
         <li><kbd>f</kbd> — <em>fine scan</em>: once you have coarsely found the peak, steps ±0.5&nbsp;mm around
         the current position in 10&nbsp;µm steps (the plot resets as the sweep begins), saves a
-        contrast-vs-position plot (PNG + CSV) and moves the stage to the peak.</li>
-        <li><kbd>g</kbd> — <em>refine scan</em>: same as <kbd>f</kbd> but 1/10th the range and step
-        (±0.05&nbsp;mm in 1&nbsp;µm steps), to polish the peak after an <kbd>f</kbd> pass has landed close.
-        Either <kbd>f</kbd> or <kbd>g</kbd> cancels a running scan.</li>
+        contrast-vs-position plot (PNG + CSV) and moves the stage to the peak
+        <span class="ph">(experimental — keep an eye on it)</span></li>
+        <li><kbd>g</kbd> — <em>refine scan</em>: same as <kbd>f</kbd> but ±0.05&nbsp;mm in 1&nbsp;µm steps —
+        run it after <kbd>f</kbd> has landed close, to polish the peak. Pressing <kbd>f</kbd> or <kbd>g</kbd>
+        during a scan cancels it</li>
         <li><kbd>a</kbd> — autoscale the plot (undo zoom/pan)</li>
         <li><kbd>c</kbd> — clear the patch selection <em>and</em> the plot</li>
         <li><kbd>r</kbd> — reset the plot but keep the patch</li>
@@ -889,6 +894,29 @@ python stage.py --status      # position + whether it has been homed</code></pre
             example of how things will look when you find the right spot: the patch amplitude spikes in the
             coherence panel as the stage crosses the coin's surface.</figcaption>
           </figure>
+          <p>You can also let the visualizer do this scanning for you. First bring the coin into
+          <strong>focus using its XY stage</strong> — turn the micro-adjusters until the coin's surface
+          detail is sharp in the live view. Once it's in focus:</p>
+          <ul class="plain">
+            <li>Press <kbd>f</kbd> for a <strong>coarse scan</strong>: it sweeps ±0.5&nbsp;mm around the
+            current position in 10&nbsp;µm steps, plotting the patch contrast as it goes, and then tries to
+            find a peak and moves the stage to it. When it lands you should see the <strong>speckle quite
+            prominently</strong> in the patch — that's the coherence gate sitting on the coin's surface.</li>
+            <li>Then, if you want to scan it better, press <kbd>g</kbd> for a <strong>fine scan</strong>:
+            the same, but ±0.05&nbsp;mm in 1&nbsp;µm steps, to polish the peak position. (Pressing
+            <kbd>f</kbd> or <kbd>g</kbd> again while a scan is running cancels it.)</li>
+          </ul>
+          <figure>
+            <video src="instructions_media/viz_scan_f.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
+            <figcaption><span class="vid-badge">video</span>Pressing <kbd>f</kbd>: the coarse scan sweeps
+            ±0.5&nbsp;mm around the current position and lands on the coin surface's contrast
+            peak.</figcaption>
+          </figure>
+          <figure>
+            <video src="instructions_media/viz_scan_g.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
+            <figcaption><span class="vid-badge">video</span>Pressing <kbd>g</kbd>: the fine scan re-sweeps
+            ±0.05&nbsp;mm in 1&nbsp;µm steps and resolves the full envelope around the peak.</figcaption>
+          </figure>
         </li>
         <li>Quit the visualizer, then perform a scan over a length of ~1&nbsp;mm with <code>oct_scan.py</code>.
         Use the temporal coherence length determined in step&nbsp;3 to choose the step size — a few steps per
@@ -1019,10 +1047,12 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
 
       <h4>Windows</h4>
       <ul class="plain">
-        <li><strong>Stage:</strong> nothing to install — pylablib drives the KDC101 directly over USB.
-        <em>(Optional)</em> Thorlabs
-        <a href="https://www.thorlabs.com/software_pages/ViewSoftwarePage.cfm?Code=Motion_Control">Kinesis</a>
-        gives you a GUI fallback for debugging the stage.</li>
+        <li><strong>Stage:</strong> install the <strong>Thorlabs Kinesis software</strong> from
+        <a href="https://www.thorlabs.com/software-pages/motion_control">thorlabs.com/software-pages/motion_control</a>
+        (64-bit installer) — it provides the APT/FTDI driver (<code>ftd2xx.dll</code>) that the KDC101 is
+        detected through; without it the stage will not be found even though Python is set up correctly.
+        Unplug/replug the KDC101 USB cable after installing. The Kinesis GUI is also handy for debugging —
+        but close it before running the scripts, since it holds the controller exclusively.</li>
         <li><strong>Allied Vision camera:</strong> <code>vmbpy</code> is <em>not on PyPI</em> — it ships as a
         wheel inside the
         <a href="https://www.alliedvision.com/en/support/software-downloads/vimba-x-sdk/vimba-x">Vimba&nbsp;X</a>
@@ -1038,6 +1068,10 @@ source .venv/bin/activate        <span class="cm"># Windows: .venv\Scripts\activ
         support</em> — IDS cameras are Windows-only in this course (which is why the macOS section below has
         no IDS entry).</li>
       </ul>
+      <div class="warn"><strong>Caution:</strong> if you are using an <strong>IDS camera</strong>, do
+      <em>NOT</em> install Vimba&nbsp;X — install only the IDS Software Suite. Installing Vimba&nbsp;X
+      alongside the IDS setup can brick the system. Only install the SDK for the camera you actually
+      have.</div>
 
       <h4>macOS</h4>
       <ul class="plain">

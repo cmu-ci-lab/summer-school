@@ -94,13 +94,27 @@ class ThorlabsStage:
     def _connect_usb(self):
         """Windows / Linux: USB APT direct via libusb."""
         devices = Thorlabs.list_kinesis_devices()
-        brushed = [(sn, desc) for sn, desc in devices if "Brushed Motor" in desc]
+
+        def is_kdc101(sn, desc):
+            # The description varies with firmware/driver era ("Brushed Motor
+            # Controller", "APT DC Motor Controller", sometimes just
+            # "KDC101"), so match loosely — and by serial prefix: KDC101
+            # serial numbers always start with 27.
+            d = (desc or "").lower()
+            return ("brushed motor" in d or "dc motor" in d
+                    or "kdc101" in d or str(sn).startswith("27"))
+
+        brushed = [(sn, desc) for sn, desc in devices if is_kdc101(sn, desc)]
 
         if not devices:
             raise RuntimeError("No Thorlabs Kinesis devices found. Check USB and APT driver.")
         if not brushed:
             found = ", ".join(f"{sn} ({d})" for sn, d in devices)
-            raise RuntimeError(f"No Brushed Motor Controller found. Connected: {found}")
+            raise RuntimeError(
+                "No KDC101 (brushed motor controller) recognized among the "
+                f"Kinesis devices. Connected: {found}\n"
+                "If one of these IS the KDC101, its description/serial is "
+                "unexpected — please report the line above.")
         if len(brushed) > 1:
             print(f"Warning: {len(brushed)} brushed controllers found, using first.")
 

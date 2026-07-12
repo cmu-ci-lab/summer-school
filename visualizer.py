@@ -20,9 +20,11 @@ Controls:
   wheel      : (over the plot) zoom the position axis around the cursor
   left-drag  : (over the plot) pan the position axis
   f          : Fine scan — once coarse alignment has the peak roughly in view,
-               steps +/- 0.5 mm around the current position at 40 um, saves a
+               steps +/- 0.5 mm around the current position at 10 um, saves a
                contrast-vs-position plot (PNG + CSV) and moves the stage to the
                coherence peak (needs a patch; f again cancels)
+  g          : Refine scan — same as f but 1/10th the range and step, to polish
+               the peak after an f pass has landed close (f or g cancels either)
   m          : Move to a typed position — type the mm and press Enter (a
                leading + or - moves relative to the current position; Esc
                cancels). Outside the visualizer, use: python stage.py --to 3.75
@@ -920,7 +922,7 @@ def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
         stage_s, color = "stage not found — camera only", TEXT_MUTED
     txt.put((width // 2, cy), stage_s, 16, color, "demi", anchor="mm")
 
-    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   m go to   f fine scan   c clear   a fit   q quit",
+    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   m go to   f/g fine scan   c clear   a fit   q quit",
             14, TEXT_2, "medium", anchor="rm")
     return bar
 
@@ -1133,6 +1135,34 @@ def main():
             print(f"Could not save the contrast plot: {e}")
         return (msg, now + 8)
 
+    def begin_scan(range_mm, step_mm, now):
+        """Validate and launch a stepped sweep of the given half-width and step
+        around the current position. Returns (scan_state_or_None, notice_or_None)."""
+        if stage is None:
+            return None, ("fine scan needs a stage", now + 4)
+        if selector.rect is None:
+            return None, ("fine scan: select a patch first (two clicks)", now + 4)
+        if pos_mm is None or moving:
+            # The window is anchored to the current position, and a mid-move
+            # poll is up to 100 ms stale.
+            return None, ("fine scan: wait for the stage to stop", now + 4)
+        # Clamp into the travel range: a scan near an end becomes asymmetric
+        # rather than commanding an invalid target.
+        lo = max(0.0, pos_mm - range_mm)
+        hi = min(STAGE_MAX_MM, pos_mm + range_mm)
+        n_steps = int(round((hi - lo) / step_mm)) + 1
+        if n_steps < FINE_MIN_STEPS:
+            print(f"Fine scan refused: only {n_steps} steps fit between "
+                  f"{lo:.3f} and {hi:.3f} mm.")
+            return None, ("fine scan: too close to a travel limit", now + 5)
+        targets = [min(lo + i * step_mm, hi) for i in range(n_steps)]
+        est_s = n_steps * (FINE_DWELL_FRAMES / max(fps, 1.0) + 0.3)
+        st = start_scan(targets, step_mm)
+        if st is not None:
+            print(f"Fine scan: {lo:.3f} → {hi:.3f} mm in {n_steps} steps of "
+                  f"{step_mm * 1000:.0f} µm (est ~{est_s:.0f}s). Press f/g to cancel.")
+        return st, None
+
     def panel_to_data(panel_x):
         """Map an x pixel inside the plot panel to a data (stage) coordinate."""
         drawn = plot_view["drawn"]
@@ -1217,6 +1247,9 @@ def main():
         print(f"f = fine scan: +/-{fine_range:g} mm around the current position "
               f"in {fine_step * 1000:.0f} µm steps, saves a contrast plot and "
               "moves to the peak (coarse-align first).")
+        print(f"g = refine scan: same but +/-{fine_range / FINE_RATIO:g} mm in "
+              f"{fine_step * 1000 / FINE_RATIO:.0f} µm steps, to polish the peak "
+              "after an f pass.")
         # The DC estimate averages patches within +/-window of the current
         # position. Shrink that toward the step size and the DC starts tracking
         # the fringe itself, flattening the very peak the scan is measuring.
@@ -1413,7 +1446,7 @@ def main():
             elif scan is not None:
                 banner = (f"FINE SCAN  {scan['i'] + 1}/{len(scan['targets'])}"
                           f"   target {scan['targets'][scan['i']]:.3f} mm"
-                          "   (f cancels)", ACCENT)
+                          "   (f/g cancels)", ACCENT)
             elif notice is not None:
                 banner = (notice[0], ACCENT)
             else:
@@ -1477,37 +1510,22 @@ def main():
                         scan = None
                         notice = ("fine scan cancelled", now + 3)
                         print("Fine scan cancelled.")
-                    elif stage is None:
-                        notice = ("fine scan needs a stage", now + 4)
-                    elif selector.rect is None:
-                        notice = ("fine scan: select a patch first (two clicks)",
-                                  now + 4)
-                    elif pos_mm is None or moving:
-                        # The window is anchored to the current position, and a
-                        # mid-move poll is up to 100 ms stale.
-                        notice = ("fine scan: wait for the stage to stop", now + 4)
                     else:
-                        # Clamp into the travel range: a scan near an end becomes
-                        # asymmetric rather than commanding an invalid target.
-                        lo = max(0.0, pos_mm - fine_range)
-                        hi = min(STAGE_MAX_MM, pos_mm + fine_range)
-                        n_steps = int(round((hi - lo) / fine_step)) + 1
-                        if n_steps < FINE_MIN_STEPS:
-                            notice = ("fine scan: too close to a travel limit",
-                                      now + 5)
-                            print(f"Fine scan refused: only {n_steps} steps fit "
-                                  f"between {lo:.3f} and {hi:.3f} mm.")
-                        else:
-                            targets = [min(lo + i * fine_step, hi)
-                                       for i in range(n_steps)]
-                            est_s = n_steps * (FINE_DWELL_FRAMES
-                                               / max(fps, 1.0) + 0.3)
-                            scan = start_scan(targets, fine_step)
-                            if scan is not None:
-                                print(f"Fine scan: {lo:.3f} → {hi:.3f} mm in "
-                                      f"{n_steps} steps of "
-                                      f"{fine_step * 1000:.0f} µm "
-                                      f"(est ~{est_s:.0f}s). Press f to cancel.")
+                        scan, note = begin_scan(fine_range, fine_step, now)
+                        if note is not None:
+                            notice = note
+                elif k == ord('g'):
+                    # Refine scan: same machinery as 'f' but 1/10th the range and
+                    # step, to polish the peak after an 'f' pass has landed close.
+                    if scan is not None:
+                        scan = None
+                        notice = ("fine scan cancelled", now + 3)
+                        print("Fine scan cancelled.")
+                    else:
+                        scan, note = begin_scan(fine_range / FINE_RATIO,
+                                                fine_step / FINE_RATIO, now)
+                        if note is not None:
+                            notice = note
                 elif k == ord('i'):
                     inset_auto = not inset_auto
                     print("Patch inset: auto-contrast (stretched — exaggerates "

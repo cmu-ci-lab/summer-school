@@ -249,6 +249,9 @@ def main():
     est_min = n * 0.25 / 60   # ~0.25 s per step (move + settle + cropped read)
     print(f"Sweep: {n} steps of {args.step_mm * 1000:g} µm "
           f"({args.start:g} → {args.end:g} mm) — roughly {est_min:.0f} min.")
+    print("  (Time is dominated by the per-step stage move/settle, not the "
+          "camera: a cropped frame reads out in ~1 ms. Frames are buffered "
+          "in memory and all processing happens after the sweep.)")
 
     # Exposure: CLI > last visualizer session > sensor current (see oct_scan).
     exposure = args.exposure

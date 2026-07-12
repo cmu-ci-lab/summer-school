@@ -19,3 +19,4 @@ live_view_captures/
 # OS / editor cruft
 .DS_Store
 last_exposure.json
+last_patch.json

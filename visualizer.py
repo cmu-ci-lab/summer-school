@@ -1190,6 +1190,10 @@ def main():
                 x0, y0, x1, y1 = rect
                 print(f"Patch selected: x[{x0}:{x1}] y[{y0}:{y1}] "
                       f"({x1 - x0}x{y1 - y0} px)")
+                # Record it (scaled to full-res sensor coords) so
+                # oct_crop_scan.py crops to exactly this region by default.
+                from patch_store import save_patch
+                save_patch(x0, y0, x1 - x0, y1 - y0, binning=live_binning)
 
     cv2.setMouseCallback(window_name, on_mouse)
 

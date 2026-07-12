@@ -276,11 +276,14 @@ def main():
         description="Cropped-ROI coherence-envelope scan over the stage travel.")
     p.add_argument("--crop", type=int, nargs=4, metavar=("X", "Y", "W", "H"),
                    default=None,
-                   help="sensor ROI; default: a --crop-size box at the centre")
+                   help="sensor ROI. Default: the patch you selected in the "
+                        "visualizer (last_patch.json); else a --crop-size box "
+                        "at the sensor centre")
     p.add_argument("--crop-size", type=int, nargs=2, metavar=("W", "H"),
                    default=(128, 128),
-                   help="ROI size when --crop is not given (default 128 128; "
-                        "keep it small — processing memory grows as W*H*frames)")
+                   help="fallback ROI size when neither --crop nor a "
+                        "visualizer patch exists (default 128 128; keep it "
+                        "small — processing memory grows as W*H*frames)")
     p.add_argument("--start", type=float, default=0.0,
                    help="sweep start in mm (default 0)")
     p.add_argument("--end", type=float, default=25.0,
@@ -375,14 +378,27 @@ def main():
     cam.connect()
 
     try:
-        # ── Crop the sensor: centre box unless --crop was explicit ──
+        # ── Crop the sensor: --crop > visualizer patch > centred box ──
         full = cam.capture()
         fh, fw = full.shape[:2]
         if args.crop is not None:
             x, y, w, h = args.crop
         else:
-            w, h = args.crop_size
-            x, y = (fw - w) // 2, (fh - h) // 2
+            from patch_store import load_patch
+            stored = load_patch()
+            if stored is not None:
+                (x, y, w, h), age = stored
+                print(f"Using the patch from your last visualizer session: "
+                      f"x={x} y={y} {w}x{h}  (saved {age})")
+                if not (0 <= x < fw and 0 <= y < fh):
+                    raise SystemExit(
+                        f"Stored patch origin ({x},{y}) is outside this "
+                        f"sensor ({fw}x{fh}) — was it selected on a different "
+                        "camera/binning? Pass --crop explicitly.")
+                w, h = min(w, fw - x), min(h, fh - y)
+            else:
+                w, h = args.crop_size
+                x, y = (fw - w) // 2, (fh - h) // 2
         x, y, w, h = cam.set_roi(x, y, w, h)
 
         if not args.no_home:

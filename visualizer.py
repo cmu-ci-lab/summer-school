@@ -20,11 +20,17 @@ Controls:
   wheel      : (over the plot) zoom the position axis around the cursor
   left-drag  : (over the plot) pan the position axis
   f          : Fine scan — once coarse alignment has the peak roughly in view,
-               steps +/- 0.5 mm around the current position at 10 um, saves a
-               contrast-vs-position plot (PNG + CSV) and moves the stage to the
-               coherence peak (needs a patch; f again cancels)
+               sweeps the scan range (1 mm total by default) around the current
+               position at 10 um, saves a contrast-vs-position plot (PNG + CSV)
+               and moves the stage to the coherence peak (needs a patch; f
+               again cancels)
   g          : Refine scan — same as f but 1/10th the range and step, to polish
                the peak after an f pass has landed close (f or g cancels either)
+  b          : Set the f/g scan range — type the TOTAL sweep in mm and press
+               Enter (2 = +/-1 mm around the current position; Esc cancels).
+               The step size does not change with it, so a wider range is a
+               proportionally longer scan — the step count and time are quoted
+               when you set it. Same as --fine-range-mm, but at runtime.
   m          : Move to a typed position — type the mm and press Enter (a
                leading + or - moves relative to the current position; Esc
                cancels). Outside the visualizer, use: python stage.py --to 3.75
@@ -72,7 +78,10 @@ MAX_POINTS = 5000         # cap on stored (position, amplitude) samples
 # reference arm has been coarsely aligned by hand — measuring the patch contrast
 # at each step. Ends by saving a contrast-vs-position plot and moving the stage
 # to the coherence peak.
-FINE_RANGE_MM = 0.5           # half-width of the sweep (+/- this around the current position)
+# The range is quoted as the TOTAL sweep everywhere the user sees it (the 'b'
+# prompt, --fine-range-mm, the startup line); internally it is halved into the
+# +/- half-width the scan machinery wants.
+FINE_RANGE_MM = 1.0           # total sweep, mm (i.e. +/-0.5 mm around the current position)
 FINE_STEP_MM = 0.010          # 10 um
 FINE_DWELL_FRAMES = 4         # frames averaged at each step (stage parked, so this is free)
 FINE_MIN_STEPS = 5            # compute_fwhm needs >= 5 points to find an envelope
@@ -443,6 +452,44 @@ class PatchSelector:
         y0, y1 = sorted((p0[1], p1[1]))
         # Enforce a minimum 2x2 patch so the amplitude is well-defined.
         return (x0, y0, max(x1, x0 + 2), max(y1, y0 + 2))
+
+
+def scan_steps(range_mm, step_mm):
+    """Number of steps a sweep of half-width `range_mm` takes at `step_mm`.
+
+    Mirrors begin_scan()'s own arithmetic, so the count quoted when a range is
+    typed is the count the scan actually runs (an unclamped one — begin_scan
+    shortens it if the sweep would run off the end of the travel).
+    """
+    return int(round(2 * range_mm / step_mm)) + 1
+
+
+def resolve_range(text, step_mm, travel_mm=STAGE_MAX_MM):
+    """Parse a typed TOTAL sweep in mm into the +/- half-width the scan uses.
+
+    'g' divides the range AND the step by FINE_RATIO, so it runs the same number
+    of steps as 'f' — validating the step count once covers both keys.
+
+    Returns the half-width. Raises ValueError with a message meant to be shown
+    to the user.
+    """
+    text = text.strip()
+    if not text:
+        raise ValueError("no range entered")
+    try:
+        total = float(text)
+    except ValueError:
+        raise ValueError(f"'{text}' is not a number") from None
+    if total <= 0:
+        raise ValueError("the range must be greater than zero")
+    if total > travel_mm:
+        raise ValueError(f"{total:g} mm is wider than the {travel_mm:g} mm travel")
+    half = total / 2.0
+    n = scan_steps(half, step_mm)
+    if n < FINE_MIN_STEPS:
+        raise ValueError(f"{total:g} mm is only {n} steps at {step_mm * 1000:g} µm "
+                         f"— need at least {FINE_MIN_STEPS} to find an envelope")
+    return half
 
 
 def clip_rect(rect, shape):
@@ -922,8 +969,8 @@ def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
         stage_s, color = "stage not found — camera only", TEXT_MUTED
     txt.put((width // 2, cy), stage_s, 16, color, "demi", anchor="mm")
 
-    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   m go to   f/g fine scan   c clear   a fit   q quit",
-            14, TEXT_2, "medium", anchor="rm")
+    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   m go to   b range   f/g fine scan   c clear   a fit   q quit",
+            13, TEXT_2, "medium", anchor="rm")
     return bar
 
 
@@ -950,16 +997,19 @@ def main():
                              "are averaged (default 0.2). With no stage it is "
                              "interpreted in frames.")
     parser.add_argument("--fine-range-mm", type=float, default=FINE_RANGE_MM,
-                        help="half-width in mm of the 'f' fine scan around the "
-                             f"current position (default {FINE_RANGE_MM:g}, i.e. "
-                             "a 1 mm sweep)")
+                        help="TOTAL sweep in mm of the 'f' fine scan, centred on "
+                             f"the current position (default {FINE_RANGE_MM:g}, "
+                             f"i.e. +/-{FINE_RANGE_MM / 2:g} mm). Also settable "
+                             "at runtime with the b key.")
     parser.add_argument("--fine-step-mm", type=float, default=FINE_STEP_MM,
                         help="step size in mm of the 'f' fine scan "
                              f"(default {FINE_STEP_MM:g} = "
                              f"{FINE_STEP_MM * 1000:g} um)")
     args = parser.parse_args()
     gamma = args.gamma
-    fine_range, fine_step = args.fine_range_mm, args.fine_step_mm
+    # fine_range is the +/- half-width the scan machinery wants; the flag (and
+    # the 'b' prompt) speak in total sweep.
+    fine_range, fine_step = args.fine_range_mm / 2.0, args.fine_step_mm
 
     # Default exposure: pick up where the last session left off (the value is
     # saved to last_exposure.json on every adjustment).
@@ -1059,9 +1109,11 @@ def main():
     # state machine inside the main loop so the preview keeps streaming and f
     # cancels. See start_scan() for the state shape.
     scan = None
-    # Typed position entry ('m'): None = normal keys; a string = what's been
-    # typed so far (a leading +/- makes it a relative move).
+    # Typed entry: None = normal keys; a string = what's been typed so far.
+    # entry_mode says what it will do on Enter — "move" ('m': go to a position,
+    # where a leading +/- means relative) or "range" ('b': set the f/g sweep).
     entry = None
+    entry_mode = None
     # 'i': percentile-stretch the magnified patch inset so faint fringes show.
     # Off by default — the inset then matches the live view exactly.
     inset_auto = False
@@ -1244,12 +1296,15 @@ def main():
           f"coarse step: {coarse_mm:g} mm, fine: {coarse_mm / FINE_RATIO:g} mm  |  "
           f"positional window: +/-{window:g} {'mm' if stage is not None else 'frames'}")
     if stage is not None:
-        print(f"f = fine scan: +/-{fine_range:g} mm around the current position "
-              f"in {fine_step * 1000:.0f} µm steps, saves a contrast plot and "
-              "moves to the peak (coarse-align first).")
-        print(f"g = refine scan: same but +/-{fine_range / FINE_RATIO:g} mm in "
+        print(f"f = fine scan: {2 * fine_range:g} mm sweep (+/-{fine_range:g}) "
+              f"around the current position in {fine_step * 1000:.0f} µm steps "
+              f"({scan_steps(fine_range, fine_step)} steps), saves a contrast "
+              "plot and moves to the peak (coarse-align first).")
+        print(f"g = refine scan: same but {2 * fine_range / FINE_RATIO:g} mm in "
               f"{fine_step * 1000 / FINE_RATIO:.0f} µm steps, to polish the peak "
               "after an f pass.")
+        print("b = set the scan range: type the total sweep in mm (f and g both "
+              "use it).")
         # The DC estimate averages patches within +/-window of the current
         # position. Shrink that toward the step size and the DC starts tracking
         # the fringe itself, flattening the very peak the scan is measuring.
@@ -1439,7 +1494,11 @@ def main():
             # Status-bar banner: fine-scan progress, or a transient notice.
             if notice is not None and now >= notice[1]:
                 notice = None
-            if entry is not None:
+            if entry is not None and entry_mode == "range":
+                banner = (f"scan range:  {entry}_   mm total"
+                          f"    (Enter to set · Esc to cancel · now "
+                          f"{2 * fine_range:g} mm)", LIVE)
+            elif entry is not None:
                 banner = (f"move to:  {entry}_   mm"
                           "    (Enter to go · Esc to cancel · +/- for a "
                           "relative move)", LIVE)
@@ -1470,31 +1529,50 @@ def main():
             key = cv2.waitKeyEx(1)
             if key != -1:
                 k = key & 0xFF
-                # ── Typed position entry ('m'): consumes EVERY key while active.
-                # This must come first: the normal bindings below include s, d,
-                # e, w, -, [, ] and q, so without it typing "3.75" would jog the
-                # stage and typing a stray letter could quit the program.
+                # ── Typed entry ('m' position, 'b' scan range): consumes EVERY
+                # key while active. This must come first: the normal bindings
+                # below include s, d, e, w, -, [, ] and q, so without it typing
+                # "3.75" would jog the stage and a stray letter could quit.
                 if entry is not None:
-                    if k in (13, 10):                       # Enter — go
-                        try:
-                            target, rel = resolve_target(entry, pos_mm)
-                            stage.move_to(target, wait=False)
-                            notice = (f"moving to {target:.4f} mm", now + 4)
-                            print(f"Moving to {target:.4f} mm"
-                                  + (f" ({entry} from {pos_mm:.4f})" if rel else ""))
-                        except ValueError as e:
-                            notice = (f"move: {e}", now + 5)
-                            print(f"Move refused: {e}")
-                        except Exception as e:
-                            notice = (f"move failed: {e}", now + 5)
-                            print(f"Move failed: {e}")
-                        entry = None
+                    if k in (13, 10):                       # Enter — apply
+                        if entry_mode == "range":
+                            try:
+                                fine_range = resolve_range(entry, fine_step)
+                                total = 2 * fine_range
+                                n = scan_steps(fine_range, fine_step)
+                                # Quote the cost now, before f is pressed: the
+                                # step size does NOT shrink with the range, so a
+                                # wide sweep is a long one.
+                                est_s = n * (FINE_DWELL_FRAMES / max(fps, 1.0) + 0.3)
+                                msg = (f"scan range {total:g} mm (±{fine_range:g})"
+                                       f" — f/g: {n} steps, ~{est_s:.0f}s each")
+                                notice = (msg, now + 6)
+                                print(msg[0].upper() + msg[1:])
+                            except ValueError as e:
+                                notice = (f"range: {e}", now + 6)
+                                print(f"Range refused: {e}")
+                        else:
+                            try:
+                                target, rel = resolve_target(entry, pos_mm)
+                                stage.move_to(target, wait=False)
+                                notice = (f"moving to {target:.4f} mm", now + 4)
+                                print(f"Moving to {target:.4f} mm"
+                                      + (f" ({entry} from {pos_mm:.4f})" if rel else ""))
+                            except ValueError as e:
+                                notice = (f"move: {e}", now + 5)
+                                print(f"Move refused: {e}")
+                            except Exception as e:
+                                notice = (f"move failed: {e}", now + 5)
+                                print(f"Move failed: {e}")
+                        entry = entry_mode = None
                     elif k == 27:                           # Esc — cancel
-                        entry = None
+                        entry = entry_mode = None           # leaves the range as it was
                     elif k in (8, 127):                     # Backspace
                         entry = entry[:-1]
-                    elif chr(k) in "0123456789." or (chr(k) in "+-" and not entry):
-                        entry += chr(k)                     # leading +/- = relative
+                    elif (chr(k) in "0123456789."
+                          or (chr(k) in "+-" and not entry
+                              and entry_mode == "move")):   # leading +/- = relative
+                        entry += chr(k)
                     # anything else is ignored rather than acted on
                 # Stage: w/s (or arrows) = coarse; e/d = fine (coarse / FINE_RATIO).
                 elif key in UP_KEYS or k == ord('w'):
@@ -1531,6 +1609,13 @@ def main():
                     print("Patch inset: auto-contrast (stretched — exaggerates "
                           "contrast and hides saturation)" if inset_auto else
                           "Patch inset: true levels (matches the live view)")
+                elif k == ord('b'):
+                    # Set the f/g sweep range. Needs neither a stage nor a patch
+                    # — typing a number should always be allowed.
+                    if scan is not None:
+                        notice = ("finish or cancel the scan first", now + 4)
+                    else:
+                        entry, entry_mode = "", "range"
                 elif k == ord('m'):
                     if stage is None:
                         notice = ("no stage to move", now + 4)
@@ -1539,7 +1624,7 @@ def main():
                     elif pos_mm is None:
                         notice = ("stage position unknown", now + 4)
                     else:
-                        entry = ""      # every key now goes to the entry branch
+                        entry, entry_mode = "", "move"   # keys now go to the entry branch
                 elif k == ord('c'):
                     selector.clear()
                     amp.reset()

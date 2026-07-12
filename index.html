@@ -635,6 +635,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li><kbd>g</kbd> — <em>refine scan</em>: same as <kbd>f</kbd> but ±0.05&nbsp;mm in 1&nbsp;µm steps —
         run it after <kbd>f</kbd> has landed close, to polish the peak. Pressing <kbd>f</kbd> or <kbd>g</kbd>
         during a scan cancels it</li>
+        <li><kbd>b</kbd> — set the <em>scan range</em> used by <kbd>f</kbd> and <kbd>g</kbd>: press <kbd>b</kbd>,
+        type the <strong>total</strong> sweep in mm and press <kbd>Enter</kbd> (type <code>2</code> for a 2&nbsp;mm
+        sweep, i.e. ±1&nbsp;mm around where you are; <kbd>Esc</kbd> cancels). Widen it when you are unsure where
+        the peak is. The step size stays the same, so a wider range means a proportionally longer scan — the
+        step count and the time it will take are shown as soon as you set it</li>
         <li><kbd>a</kbd> — autoscale the plot (undo zoom/pan)</li>
         <li><kbd>c</kbd> — clear the patch selection <em>and</em> the plot</li>
         <li><kbd>r</kbd> — reset the plot but keep the patch</li>
@@ -790,7 +795,8 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <ol>
          <li>With a patch selected the <kbd>f</kbd> key runs a local scan centered around the current position of the stage— it covers a range of ±0.5&nbsp;mm
       around the current position in 10&nbsp;µm steps, then moves the stage to the peak and saves a
-      contrast-vs-position plot.
+      contrast-vs-position plot. If you are not confident the peak lies within that ±0.5&nbsp;mm, press
+      <kbd>b</kbd> first and type a wider total sweep in mm (e.g. <code>2</code> for ±1&nbsp;mm).
         
     <!-- </div> -->
       <!-- <figure>

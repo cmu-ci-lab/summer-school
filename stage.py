@@ -212,6 +212,22 @@ class ThorlabsStage:
     def stop(self):
         self._stage.stop()
 
+    def get_velocity(self):
+        """Current max move velocity in user units per second."""
+        return self._stage.get_velocity_parameters().max_velocity * self._scale
+
+    def set_velocity(self, max_velocity, acceleration=None):
+        """Set the move velocity (user units/s; acceleration in units/s^2).
+
+        Used e.g. by oct_crop_scan's continuous mode, where the frame spacing
+        is velocity / camera fps. Persists until changed or power cycle —
+        callers should restore the previous value (see get_velocity).
+        """
+        kwargs = {"max_velocity": max_velocity / self._scale}
+        if acceleration is not None:
+            kwargs["acceleration"] = acceleration / self._scale
+        self._stage.setup_velocity(**kwargs)
+
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------

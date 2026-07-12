@@ -10,8 +10,17 @@ amplitude vs stage position with a fitted Gaussian envelope — peak position
 and FWHM annotated. Everything is saved: the curve (.npz), the plot (.png),
 and optionally the raw cropped stack.
 
+Two scan modes:
+  stepped     move -> settle -> capture at every step (exact positions; slow —
+              ~0.25 s of stage overhead per step, so 2501 steps ≈ 10 min)
+  continuous  ONE continuous move at --velocity-mm-s while the camera
+              free-runs into a buffer; each frame's position is interpolated
+              from a timestamped position log (fast — travel/velocity seconds;
+              frame spacing = velocity / camera fps)
+
 Usage:
-    python oct_crop_scan.py                          # 128x128 crop at sensor centre
+    python oct_crop_scan.py                          # stepped, 128x128 centre crop
+    python oct_crop_scan.py --mode continuous --velocity-mm-s 0.5
     python oct_crop_scan.py --crop 900 700 128 128   # explicit x y w h
     python oct_crop_scan.py --start 10 --end 15 --step-mm 0.005
     python oct_crop_scan.py --from-file oct_crop_scans/cropscan_x.npz   # re-plot
@@ -183,6 +192,85 @@ def process(stack, patch_size, temporal_window):
 # Capture
 # ──────────────────────────────────────────────────────────────────────────────
 
+def sweep_stepped(stage, cam, positions):
+    """move -> settle -> capture at every position. Exact but slow."""
+    frames = []
+    n = len(positions)
+    t0 = time.time()
+    for i, pos in enumerate(positions):
+        stage.move_to(pos)
+        frames.append(cam.capture())
+        if (i + 1) % 100 == 0 or i == n - 1:
+            el = time.time() - t0
+            eta = el / (i + 1) * (n - i - 1)
+            print(f"  [{i + 1}/{n}]  {pos:.3f} mm   "
+                  f"elapsed {el / 60:.1f} min, eta {eta / 60:.1f} min")
+    return np.asarray(positions, float), frames
+
+
+def sweep_continuous(stage, cam, start, end, velocity_mm_s,
+                     max_frames=60000, poll_every=5):
+    """ONE continuous move while the camera free-runs into a buffer.
+
+    Frames are timestamped as they arrive; the stage position is polled (with
+    timestamps) every `poll_every` frames; afterwards each frame's position is
+    interpolated from the position log. Frame spacing = velocity / fps.
+    """
+    print(f"Moving to start ({start:g} mm)...")
+    stage.move_to(start)
+
+    old_v = None
+    try:
+        old_v = stage.get_velocity()
+        stage.set_velocity(velocity_mm_s)
+        print(f"Sweep velocity: {velocity_mm_s:g} mm/s "
+              f"(was {old_v:g}) — sweep ≈ {(end - start) / velocity_mm_s:.0f} s")
+    except Exception as e:
+        print(f"Could not set stage velocity ({e}); sweeping at the current "
+              "velocity — frame spacing will follow it.")
+
+    frames, frame_t = [], []
+    pos_t, pos_v = [], []
+
+    def poll():
+        ta = time.time()
+        v = stage.position
+        pos_t.append((ta + time.time()) / 2)   # midpoint of the serial query
+        pos_v.append(v)
+
+    try:
+        poll()
+        stage.move_to(end, wait=False)
+        t0 = time.time()
+        while len(frames) < max_frames:
+            frame_t.append(time.time())
+            frames.append(cam.capture())
+            if len(frames) % poll_every == 0:
+                poll()
+                if not stage.is_moving and abs(pos_v[-1] - end) < 0.05:
+                    break
+                if len(frames) % (poll_every * 40) == 0:
+                    print(f"  {pos_v[-1]:.3f} mm   {len(frames)} frames   "
+                          f"{len(frames) / (time.time() - t0):.0f} fps")
+        poll()
+    finally:
+        if old_v is not None:
+            try:
+                stage.set_velocity(old_v)
+            except Exception:
+                pass
+
+    positions = np.interp(frame_t, pos_t, pos_v)
+    spacing = np.median(np.diff(positions[np.argsort(frame_t)]))
+    print(f"Captured {len(frames)} frames; median spacing "
+          f"{spacing * 1000:.1f} µm ({len(pos_v)} position samples).")
+    # Sort by position so downstream fitting/plotting sees a monotone axis.
+    order = np.argsort(positions, kind="stable")
+    positions = positions[order]
+    frames = [frames[i] for i in order]
+    return positions, frames
+
+
 def main():
     p = argparse.ArgumentParser(
         description="Cropped-ROI coherence-envelope scan over the stage travel.")
@@ -198,7 +286,14 @@ def main():
     p.add_argument("--end", type=float, default=25.0,
                    help="sweep end in mm (default 25)")
     p.add_argument("--step-mm", type=float, default=0.010,
-                   help="step size in mm (default 0.010 = 10 um -> 2501 frames)")
+                   help="stepped mode: step size in mm (default 0.010 = 10 um "
+                        "-> 2501 frames)")
+    p.add_argument("--mode", choices=["stepped", "continuous"], default="stepped",
+                   help="stepped (exact positions, slow) or continuous (one "
+                        "move, frames buffered + positions interpolated, fast)")
+    p.add_argument("--velocity-mm-s", type=float, default=0.5,
+                   help="continuous mode: sweep velocity in mm/s (default 0.5; "
+                        "frame spacing = velocity / camera fps)")
     p.add_argument("--exposure", type=float, default=None,
                    help="exposure in us (default: last visualizer session, "
                         "else the sensor's current value)")
@@ -244,14 +339,20 @@ def main():
                      if fit.get("direct_fwhm_mm") else ""))
         return
 
-    positions = np.arange(args.start, args.end + args.step_mm / 2, args.step_mm)
-    n = len(positions)
-    est_min = n * 0.25 / 60   # ~0.25 s per step (move + settle + cropped read)
-    print(f"Sweep: {n} steps of {args.step_mm * 1000:g} µm "
-          f"({args.start:g} → {args.end:g} mm) — roughly {est_min:.0f} min.")
-    print("  (Time is dominated by the per-step stage move/settle, not the "
-          "camera: a cropped frame reads out in ~1 ms. Frames are buffered "
-          "in memory and all processing happens after the sweep.)")
+    if args.mode == "stepped":
+        targets = np.arange(args.start, args.end + args.step_mm / 2, args.step_mm)
+        est_min = len(targets) * 0.25 / 60   # ~0.25 s/step: move + settle
+        print(f"Stepped sweep: {len(targets)} steps of "
+              f"{args.step_mm * 1000:g} µm ({args.start:g} → {args.end:g} mm) "
+              f"— roughly {est_min:.0f} min.")
+        print("  (Time is dominated by the per-step stage move/settle, not "
+              "the camera: a cropped frame reads out in ~1 ms. Frames are "
+              "buffered in memory; all processing happens after the sweep.)")
+    else:
+        print(f"Continuous sweep: {args.start:g} → {args.end:g} mm at "
+              f"{args.velocity_mm_s:g} mm/s ≈ "
+              f"{(args.end - args.start) / args.velocity_mm_s:.0f} s; frame "
+              "positions interpolated from a timestamped position log.")
 
     # Exposure: CLI > last visualizer session > sensor current (see oct_scan).
     exposure = args.exposure
@@ -287,16 +388,12 @@ def main():
         if not args.no_home:
             stage.home()
 
-        frames = []
-        t0 = time.time()
-        for i, pos in enumerate(positions):
-            stage.move_to(pos)
-            frames.append(cam.capture())
-            if (i + 1) % 100 == 0 or i == n - 1:
-                el = time.time() - t0
-                eta = el / (i + 1) * (n - i - 1)
-                print(f"  [{i + 1}/{n}]  {pos:.3f} mm   "
-                      f"elapsed {el / 60:.1f} min, eta {eta / 60:.1f} min")
+        if args.mode == "stepped":
+            positions, frames = sweep_stepped(stage, cam, targets)
+        else:
+            positions, frames = sweep_continuous(stage, cam, args.start,
+                                                 args.end, args.velocity_mm_s)
+        n = len(positions)
 
         stack = np.stack(frames, axis=-1)
         print(f"Captured stack: {stack.shape}  {stack.dtype}")
@@ -308,9 +405,14 @@ def main():
         # ── Save curve (+ optional stack) and metadata ──
         out_dir = Path(cam.save_dir)
         stem = f"cropscan_{time.strftime('%Y%m%d_%H%M%S')}"
-        meta = {"crop_xywh": [int(x), int(y), int(w), int(h)],
+        eff_step = (float(np.median(np.diff(positions))) if n > 1
+                    else args.step_mm)
+        meta = {"mode": args.mode,
+                "crop_xywh": [int(x), int(y), int(w), int(h)],
                 "start_mm": args.start, "end_mm": args.end,
-                "step_mm": args.step_mm, "n_frames": n,
+                "step_mm": eff_step, "n_frames": n,
+                "velocity_mm_s": (args.velocity_mm_s
+                                  if args.mode == "continuous" else None),
                 "exposure_us": cam.exposure_us,
                 "patch_size": args.patch_size,
                 "temporal_window": args.temporal_window,
@@ -332,7 +434,7 @@ def main():
                      if fit.get("direct_fwhm_mm") else ""))
         else:
             print("No usable envelope peak found — plotting raw curve only.")
-        warn_if_undersampled(fit, args.step_mm)
+        warn_if_undersampled(fit, eff_step)
         plot_envelope(positions, amplitude, fit, out_dir / f"{stem}.png",
                       title=f"{stem}   crop {w}x{h} @ ({x},{y})",
                       show=not args.no_show, zoom_mm=args.zoom_um / 1000)

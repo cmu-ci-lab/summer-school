@@ -294,7 +294,7 @@
     <section class="step" id="c2">
       <h3><span class="step-num">2</span>Mount the beamsplitter post</h3>
       <p>Mount the main post with the beamsplitter (BS) using the cap screws at the designated location
-      on the breadboard. Ask for help if you aren't sure about the orientation.</p>
+      on the breadboard. Depending on your specific setup, the position of the beamsplitter may not match the one shown below. Ask one of us to verify if the positioning is correct.</p>
       <div class="figgrid wide">
         <img src="instructions_media/p02_y0073_0.jpg" alt="Beamsplitter post placed on breadboard">
         <img src="instructions_media/p02_y0252_1.jpg" alt="Beamsplitter post secured with cap screws">
@@ -792,33 +792,42 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
       contrast-vs-position plot.
         
     <!-- </div> -->
-      <figure>
+      <!-- <figure>
         <video src="instructions_media/viz_zooming_into_coherence.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
         <figcaption><span class="vid-badge">video</span>Zooming into the coherence peak from a wide sweep,
         jogging to just before it, and stepping through with a finer step.</figcaption>
-      </figure>
-      <p>You can use the mirror-orientation adjusters to change the interference fringe pattern:</p>
+      </figure> -->
+
+       </li>
+      <li> Once you've found a peak you should be able to see fringes already. 
+              You can use the mirror-orientation adjusters to change the interference fringe pattern:
       <figure>
         <video src="instructions_media/viz_fringe_pattern.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
         <figcaption><span class="vid-badge">video</span>The fringe pattern changing as the mirror-orientation
         adjusters are turned — the spacing and curvature of the fringes follow the relative tilt of the two
         mirrors.</figcaption>
       </figure>
-       </li>
-      <li> Once you've found a peak you should be able to see fringes already. Follow it with <kbd>g</kbd> to repeat the scan 10× finer (±0.05&nbsp;mm in
-      1&nbsp;µm steps) and nail the centre to get peak fringe contrast. </li>
+      </li><li>Follow it with a scan with the <kbd>g</kbd> key to repeat the same kind of scan, but for a 10× finer range (±0.05&nbsp;mm in
+      1&nbsp;µm steps) and nail the centre to get obtain fringe contrast. </li>
 </ol>
     </section>
 
     <section class="step" id="a7">
-      <h3><span class="step-num">3</span>Measuring temporal coherence length</h3>
-      <p>With a patch selected in <code>visualizer.py</code>, do a finer sweep, as demonstrated in the video
+      <h3><span class="step-num">3</span>The temporal coherence length</h3>
+      <p>
+        Performing a fine scan using either the <kbd>f</kbd> or <kbd>g</kbd> keys will give you a fully resolved coherence envelope. Find a saved plot of the interference contrast curve as a function of motor position in <code>live_view_captures/</code>. 
+        The FWHM of this envelope is the temporal coherence length of the light source, which sets the depth resolution for OCT. You should also find it reported at the top panel of the visualizer window.
+      </p>
+
+      <!-- <p>With a patch selected in <code>visualizer.py</code>, do a finer sweep, as demonstrated in the video
       in step&nbsp;1: move to just <em>before</em> the peak, drop the step size with <kbd>[</kbd>, and then
       step through the peak with the fine keys <kbd>e</kbd>/<kbd>d</kbd> (steps of 3–5&nbsp;µm over a range of
       about 200–300&nbsp;µm) — to refine this position such that you get maximum contrast. The <kbd>g</kbd>
       <em>refine scan</em> automates exactly this finer sweep (±0.05&nbsp;mm in 1&nbsp;µm steps) and reports the
       same FWHM. Once the envelope crosses half-max on both sides of the peak, the panel reports the
-      <strong>coherence FWHM</strong> and the peak position directly in the stat tiles. This <strong>temporal coherence length</strong> of the
+      <strong>coherence FWHM</strong> and the peak position directly in the stat tiles.  -->
+      <p>
+      This <strong>temporal coherence length</strong> of the
       spectrally filtered light reaching the camera should be our <em>depth resolution</em> for OCT.</p>
       <figure><img src="instructions_media/viz_zoom_last.jpg" alt="Visualizer after a fine sweep: resolved coherence envelope with FWHM 29.3 um" width="640">
       <figcaption>After the fine sweep the envelope is fully resolved and the FWHM tile reads out the
@@ -848,17 +857,25 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
     <section class="step" id="a8">
       <h3><span class="step-num">4</span>Scanning a coin</h3>
       <ol class="sub">
-        <li>When you're ready, <strong>ask for a coin sample mount</strong> to swap in place of the
+        <li>Now that we've aligned and characterized our OCT system, we're ready to scan objects! When you're ready, <strong>ask for a coin sample mount</strong> to swap in place of the
         rectangular mirror, and mount a coin (quarter/euro/…) on it.
           <figure><img src="instructions_media/p18_y0367_1.jpg" alt="Coin mounted in place of the rectangular mirror" width="380"></figure>
         </li>
-        <li>Insert the 0.6&nbsp;OD ND filter (placed at a slight angle to avoid inter-reflections) in the light
+        <li>Since the coin scattters light, it doesn't reflect all of the incident light back to the camera, and will appear much darker. Insert the 0.6&nbsp;OD ND filter (placed at a slight angle to avoid inter-reflections) in the light
         path to roughly match intensities from both arms. (You will need to readjust your exposure time.)
           <figure><img src="instructions_media/p19_y0088_0.jpg" alt="ND filter inserted at an angle in the light path" width="380"></figure>
         </li>
-        <li><em>(Optional)</em> You may readjust your focus depending on the object surface position. You may
-        also reduce your aperture size to increase your depth of field.</li>
-        <li>In <code>visualizer.py</code>, select a small patch on the coin (two clicks), and sweep the stage
+        <!-- <li><em>(Optional)</em> You may readjust your focus depending on the object surface position. You may -->
+        <!-- also reduce your aperture size to increase your depth of field.</li> -->
+        <li>
+         If we now scanned the reference arm through the entire range of the stage, we will be able to reconstruct a depth map of the coin based on when interference is detected at each region of the coin.
+         However, since the step size will need to be on the order of the coherence length (tens of microns), this would take nearly forever to complete.
+         Instead, we would like to align the reference mirror to a match the surface on a patch region on the coin using the same procedure that we followed for the mirror, and then do a short <code>1&nbsp;mm</code> OCT scan around that aligned position.
+         </li> 
+         <li>
+         To perform coarse alignment, leave the reference mirror and lens focusing fixed as it was before, 
+         <!-- and adjust the distance of the coin using the micrometer adjusters until the coin comes into focus (particularly the region in the crop). -->
+          <!-- In <code>visualizer.py</code>, select a small patch on the coin (two clicks), and sweep the stage
         (hold <kbd>w</kbd>, repositioning with <kbd>s</kbd> as needed) once again, over a length comparable to the error due to the difference
         in thickness of the coin and the mirror (1–2&nbsp;mm). The peak in the coherence panel gives you a
         ‘center’ position around which we will perform the scan.
@@ -871,16 +888,16 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
           ‘center’. Once it lands close, press <kbd>g</kbd> for a second pass at 1/10th the range and step
           (±0.05&nbsp;mm in 1&nbsp;µm steps) to further refine the centre. It takes under a minute; either
           <kbd>f</kbd> or <kbd>g</kbd> cancels a running scan. It needs you to already be within ~0.5&nbsp;mm
-          of the peak, so it refines the manual sweep rather than replacing it.</div>
-          <div class="note"><strong>Going back to a position later:</strong> write the centre down. Inside the
+          of the peak, so it refines the manual sweep rather than replacing it.</div> -->
+          <!-- <div class="note"><strong>Going back to a position later:</strong> write the centre down. Inside the
           visualizer, press <kbd>m</kbd> and type it to go straight back. With the visualizer <em>closed</em>,
           you can also drive the stage from a terminal:
           <pre><code>python stage.py --to 3.75     # absolute, mm
 python stage.py --by -0.2     # relative
 python stage.py --status      # position + whether it has been homed</code></pre>
           Only one program can hold the controller at a time, so quit the visualizer before using this (and
-          vice versa).</div>
-          <p>When you are at the right depth, you should see this <strong>moving speckle</strong> inside the
+          vice versa).</div> -->
+          <!-- <p>When you are at the right depth, you should see this <strong>moving speckle</strong> inside the
           highlighted patch — the coin's rough surface makes the interference grainy and shimmering rather
           than smooth fringes:</p>
           <figure>
@@ -893,10 +910,10 @@ python stage.py --status      # position + whether it has been homed</code></pre
             <figcaption><span class="vid-badge">video</span>Pathlength matching on the coin — this is an
             example of how things will look when you find the right spot: the patch amplitude spikes in the
             coherence panel as the stage crosses the coin's surface.</figcaption>
-          </figure>
-          <p>You can also let the visualizer do this scanning for you. First bring the coin into
+          </figure> -->
+          and bring the coin into
           <strong>focus using its XY stage</strong> — turn the micro-adjusters until the coin's surface
-          detail is sharp in the live view. Once it's in focus:</p>
+          detail is sharp in the live view.           Just like we did for the mirror, we now have them coarsely matched, using the <code>f</code> key, we can automatically find the motor position that matches with the patch on the coin:</p>
           <ul class="plain">
             <li>Press <kbd>f</kbd> for a <strong>coarse scan</strong>: it sweeps ±0.5&nbsp;mm around the
             current position in 10&nbsp;µm steps, plotting the patch contrast as it goes, and then tries to

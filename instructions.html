@@ -349,8 +349,8 @@
     <section class="step" id="c5">
       <h3><span class="step-num">5</span>Reference arm</h3>
       <ol class="sub">
-        <li>Place the XY stage (with the motorized Z825B actuator inserted) at the designated location on
-        the breadboard and secure it using washers and cap screws.
+        <li>Place the XY stage (with the motorized Z825B actuator inserted) on
+        the breadboard (at the designated location indicated by screws) and secure it using washers and cap screws.
           <div class="figgrid">
             <img src="instructions_media/p05_y0214_2.jpg" alt="Reference XY stage placement">
             <img src="instructions_media/p05_y0216_3.jpg" alt="XY stage with Z825B actuator">
@@ -378,7 +378,7 @@
       <h3><span class="step-num">6</span>Object arm</h3>
       <ol class="sub">
         <li>Similar to the reference arm, place and secure the XY translation stage for the object side
-        at the designated location.
+        at the designated location. Your stage may look slightly different from the XY stage in the image.
           <div class="figgrid">
             <img src="instructions_media/p08_y0073_0.jpg" alt="Object-side XY translation stage">
             <img src="instructions_media/p08_y0073_1.jpg" alt="Placing the object stage on the breadboard">
@@ -630,7 +630,8 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li><kbd>f</kbd> — <em>fine scan</em>: once you have coarsely found the peak, steps ±0.5&nbsp;mm around
         the current position in 10&nbsp;µm steps (the plot resets as the sweep begins), saves a
         contrast-vs-position plot (PNG + CSV) and moves the stage to the peak
-        <span class="ph">(experimental — keep an eye on it)</span></li>
+        <!-- <span class="ph">(experimental — keep an eye on it)</span> -->
+      </li>
         <li><kbd>g</kbd> — <em>refine scan</em>: same as <kbd>f</kbd> but ±0.05&nbsp;mm in 1&nbsp;µm steps —
         run it after <kbd>f</kbd> has landed close, to polish the peak. Pressing <kbd>f</kbd> or <kbd>g</kbd>
         during a scan cancels it</li>
@@ -707,7 +708,7 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
     <section class="step" id="a5">
       <h3><span class="step-num">1</span>Coarse pathlength matching</h3>
       <ol class="sub">
-        <li><strong>Focus the lens onto the mirror.</strong> Block the mirror on the motorized stage using a piece of card. Change the lens focusing such that
+        <li><strong>Focus the lens onto the object-side mirror.</strong> Block the mirror on the motorized stage using a piece of card. Change the lens focusing such that
         the other mirror (straight opposite the camera) comes into focus (about 1:1).
           <figure>
             <video src="instructions_media/hw_zoom_lens.mp4" controls muted loop playsinline preload="metadata" width="300"></video>
@@ -734,7 +735,7 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             sharp.</figcaption>
           </figure>
         </li>
-        <li>Unblock the mirror on the motorized stage. Leaving the lens focus setting fixed, adjust the stage position using the keys until this mirror comes into focus as well. You can use the same trick of laterally moving the mirror to bring its edge into view and focus on that. You should now have both mirrors in focus.
+        <li>Unblock the mirror on the motorized stage. Leaving the lens focus setting fixed, adjust the stage position using the keys until this mirror comes into focus as well. You can use the same trick of laterally moving the mirror to bring its edge into view. The edge may not be perfectly at te same depth as the surface of the mirror, so try and refine it to focus on dust/scratches on the mirror. You should now have both mirrors in focus.
           </li>
           <li>
           Now that both of the mirror arms are in focus, they are now coarsely matched to be at about the same distance from the beamsplitter. We now need to make this a lot more precisely matched (within the coherence length of the light source, typically <code><40&nbsp;µm</code>)
@@ -808,7 +809,7 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         mirrors.</figcaption>
       </figure>
       </li><li>Follow it with a scan with the <kbd>g</kbd> key to repeat the same kind of scan, but for a 10× finer range (±0.05&nbsp;mm in
-      1&nbsp;µm steps) and nail the centre to get obtain fringe contrast. </li>
+      1&nbsp;µm steps) and nail the centre to obtain peak fringe contrast. </li>
 </ol>
     </section>
 

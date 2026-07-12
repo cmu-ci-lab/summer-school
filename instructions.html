@@ -234,7 +234,7 @@
       <a href="#a1"><span class="side-num">2</span>Light into the camera</a>
       <a href="#viz-tour"><span class="side-num">3</span>Getting to know the visualizer</a>
       <a href="#a2"><span class="side-num">4</span>Collimating the LED</a>
-      <a href="#a3"><span class="side-num">5</span>Aligning the mirrors</a>
+      <a href="#a3"><span class="side-num">5</span>Making the mirrors parallel</a>
       <p class="side-part">Part 3 · OCT</p>
       <a href="#a5"><span class="side-num">1</span>Coarse pathlength matching</a>
       <a href="#a6"><span class="side-num">2</span>Fine pathlength matching</a>
@@ -341,7 +341,7 @@
             <img src="instructions_media/p05_y0073_0.jpg" alt="Attaching the camera to the back of the lens">
             <img src="instructions_media/p05_y0073_1.jpg" alt="Camera mounted on the lens">
           </div>
-          <div class="warn"><strong>Careful:</strong> don't expose the bare sensor while handling the camera.</div>
+          <div class="warn"><strong>Careful:</strong> careful not to leave bare sensor open too long while handling the camera (to prevent dust/damage).</div>
         </li>
       </ol>
     </section>
@@ -625,8 +625,10 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li><kbd>+</kbd>&thinsp;/&thinsp;<kbd>-</kbd> — brighten / dim (exposure)</li>
         <li><kbd>f</kbd> — <em>fine scan</em>: once you have coarsely found the peak, steps ±0.5&nbsp;mm around
         the current position in 10&nbsp;µm steps (the plot resets as the sweep begins), saves a
-        contrast-vs-position plot (PNG + CSV) and moves the stage to the peak
-        <span class="ph">(experimental — keep an eye on it)</span></li>
+        contrast-vs-position plot (PNG + CSV) and moves the stage to the peak.</li>
+        <li><kbd>g</kbd> — <em>refine scan</em>: same as <kbd>f</kbd> but 1/10th the range and step
+        (±0.05&nbsp;mm in 1&nbsp;µm steps), to polish the peak after an <kbd>f</kbd> pass has landed close.
+        Either <kbd>f</kbd> or <kbd>g</kbd> cancels a running scan.</li>
         <li><kbd>a</kbd> — autoscale the plot (undo zoom/pan)</li>
         <li><kbd>c</kbd> — clear the patch selection <em>and</em> the plot</li>
         <li><kbd>r</kbd> — reset the plot but keep the patch</li>
@@ -678,9 +680,9 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
     </section>
 
     <section class="step" id="a3">
-      <h3><span class="step-num">5</span>Aligning the mirrors</h3>
+      <h3><span class="step-num">5</span>Making the mirrors parallel</h3>
       <p>Use the adjusters on the mirror mounts to position both images of the LED roughly at the center
-      of the field of view of the camera.</p>
+      of the field of view of the camera (better aligned, the better). You can use the inset preview by selecting a crop region to help you align them precisely.</p>
       <figure>
         <video src="instructions_media/viz_aligning.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
         <figcaption><span class="vid-badge">video</span>Walking the two LED images on top of each other with
@@ -693,15 +695,15 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
       <span class="part-tag">Part 3</span>
       <h2>OCT</h2>
     </div>
-    <p class="part-note">With the interferometer aligned, use it as a time-domain OCT scanner: match the
+    <p class="part-note">Now that we've collimated our light source and made the mirrors nearly parallel, we will now align it to use it for a time-domain OCT scanner: match the
     pathlengths of the two arms, measure the coherence length (your depth resolution), then scan an object
     and reconstruct its depth map.</p>
 
     <section class="step" id="a5">
       <h3><span class="step-num">1</span>Coarse pathlength matching</h3>
       <ol class="sub">
-        <li>Block the mirror on the motorized stage using a piece of card. Change the lens focusing such that
-        the other mirror comes into focus (about 1:1).
+        <li><strong>Focus the lens onto the mirror.</strong> Block the mirror on the motorized stage using a piece of card. Change the lens focusing such that
+        the other mirror (straight opposite the camera) comes into focus (about 1:1).
           <figure>
             <video src="instructions_media/hw_zoom_lens.mp4" controls muted loop playsinline preload="metadata" width="300"></video>
             <figcaption><span class="vid-badge">video</span>Changing the lens focusing — turn the focus ring
@@ -713,8 +715,6 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             1:1 — watch the dust and scratches on the glass sharpen up.</figcaption>
           </figure>
           <p>You will need to increase the exposure time and/or LED power.</p>
-        </li>
-        <li>Use the mirror itself to help with focusing.
           <div class="note tip"><strong>Tip:</strong> Laterally move the mirror using the micro-adjusters
           until its edge comes into view, and make sure to focus on the edge — it gives you something sharp
           to judge the focus by. You may also use dust or scratches present on the mirror.</div>
@@ -729,15 +729,19 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             sharp.</figcaption>
           </figure>
         </li>
-        <li>Unblock the mirror on the motorized stage and select a <strong>patch</strong> on the live view —
-        two clicks: the first anchors a corner, the second finalizes it. The coherence panel now tracks that
-        patch.
+        <li>Unblock the mirror on the motorized stage. Leaving the lens focus setting fixed, adjust the stage position using the keys until this mirror comes into focus as well. You can use the same trick of laterally moving the mirror to bring its edge into view and focus on that. You should now have both mirrors in focus.
+          </li>
+          <li>
+          Now that both of the mirror arms are in focus, they are now coarsely matched to be at about the same distance from the beamsplitter. We now need to make this a lot more precisely matched (within the coherence length of the light source, typically <code><40&nbsp;µm</code>)
+         
+        Select a <strong>patch</strong> on the live view — two clicks: the first anchors a corner, the second finalizes it. The coherence panel now tracks that
+        patch as you move the stage.
           <figure>
             <video src="instructions_media/viz_select_patch.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
             <figcaption><span class="vid-badge">video</span>Selecting a patch: one click to anchor a corner,
             a second to finalize.</figcaption>
           </figure>
-          <div class="theory">
+           <div class="theory">
             <p class="theory-title">What the panel is computing</p>
             <p>The plotted value is the <code>computeMeanDiff</code> measure: within the patch, take each
             frame's absolute deviation from the local (running) mean intensity, and average it —
@@ -747,8 +751,11 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             at a noise floor and then jumps in a sharp peak at the matched position. (Step&nbsp;4 uses this
             same measure per-pixel to build the depth map.)</p>
           </div>
+        If you're lucky, you may be able to perform precise alignment of the reference mirror (on the motorized stage) to match with the object-side mirror (right opposite the camera) using just the visualizer and using the <kbd>w</kbd>/<kbd>s</kbd> keys to move the stage.
+        Most likely, you will need to automate the precise alignment, as described in the next step.
         </li>
-        <li>Do a <strong>full sweep</strong> of the stage: move it close to 0&nbsp;mm, then <em>hold</em>
+        <!-- <li>Adjusting the position the stage plots </li> -->
+        <!-- <li>Do a <strong>full sweep</strong> of the stage: move it close to 0&nbsp;mm, then <em>hold</em>
         <kbd>w</kbd> to sweep continuously all the way up to ~25&nbsp;mm (the end of travel). Use a step that
         is neither too small nor too large — around 0.3–0.5&nbsp;mm. Too small and the sweep takes forever;
         too large and you can step clean over the region where the interference appears. Somewhere along the
@@ -762,16 +769,24 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
             sits at the noise floor until the pathlengths match — then fringes appear and the amplitude spikes
             into a sharp peak.</figcaption>
           </figure>
-        </li>
+        </li> -->
+        
       </ol>
     </section>
 
     <section class="step" id="a6">
       <h3><span class="step-num">2</span>Fine pathlength matching</h3>
-      <p>Move the mirror back to just <em>before</em> the peak you found (zoom into the plot around it with
-      the mouse wheel if it helps), then decrease the step size with <kbd>[</kbd> and step through the peak
+      <!-- <p>Move the mirror back to just <em>before</em> the peak you found (zoom into the plot around it with -->
+      <!-- the mouse wheel if it helps), then decrease the step size with <kbd>[</kbd> and step through the peak
       with the fine keys <kbd>e</kbd>/<kbd>d</kbd>. At the top of the peak you should see bright interference
-      fringes across the camera view.</p>
+      fringes across the camera view.</p> -->
+      <!-- <div class="note"><strong>Let the visualizer do it:</strong> -->
+        <ol>
+         <li>With a patch selected the <kbd>f</kbd> key runs a local scan centered around the current position of the stage— it covers a range of ±0.5&nbsp;mm
+      around the current position in 10&nbsp;µm steps, then moves the stage to the peak and saves a
+      contrast-vs-position plot.
+        
+    <!-- </div> -->
       <figure>
         <video src="instructions_media/viz_zooming_into_coherence.mp4" controls muted loop playsinline preload="metadata" width="560"></video>
         <figcaption><span class="vid-badge">video</span>Zooming into the coherence peak from a wide sweep,
@@ -784,6 +799,10 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         adjusters are turned — the spacing and curvature of the fringes follow the relative tilt of the two
         mirrors.</figcaption>
       </figure>
+       </li>
+      <li> Once you've found a peak you should be able to see fringes already. Follow it with <kbd>g</kbd> to repeat the scan 10× finer (±0.05&nbsp;mm in
+      1&nbsp;µm steps) and nail the centre to get peak fringe contrast. </li>
+</ol>
     </section>
 
     <section class="step" id="a7">
@@ -791,9 +810,10 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
       <p>With a patch selected in <code>visualizer.py</code>, do a finer sweep, as demonstrated in the video
       in step&nbsp;1: move to just <em>before</em> the peak, drop the step size with <kbd>[</kbd>, and then
       step through the peak with the fine keys <kbd>e</kbd>/<kbd>d</kbd> (steps of 3–5&nbsp;µm over a range of
-      about 200–300&nbsp;µm) — to refine this position such that you get maximum contrast. Once the envelope
-      crosses half-max on both sides of the peak, the panel reports the <strong>coherence FWHM</strong> and the
-      peak position directly in the stat tiles. This <strong>temporal coherence length</strong> of the
+      about 200–300&nbsp;µm) — to refine this position such that you get maximum contrast. The <kbd>g</kbd>
+      <em>refine scan</em> automates exactly this finer sweep (±0.05&nbsp;mm in 1&nbsp;µm steps) and reports the
+      same FWHM. Once the envelope crosses half-max on both sides of the peak, the panel reports the
+      <strong>coherence FWHM</strong> and the peak position directly in the stat tiles. This <strong>temporal coherence length</strong> of the
       spectrally filtered light reaching the camera should be our <em>depth resolution</em> for OCT.</p>
       <figure><img src="instructions_media/viz_zoom_last.jpg" alt="Visualizer after a fine sweep: resolved coherence envelope with FWHM 29.3 um" width="640">
       <figcaption>After the fine sweep the envelope is fully resolved and the FWHM tile reads out the
@@ -843,9 +863,10 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
           at each step, then <strong>moves the stage to the peak</strong> and saves a contrast-vs-position
           plot to <code>live_view_captures/</code> (a PNG plus the raw CSV). The plot also reports the
           <strong>coherence length</strong> — the FWHM of the envelope. Use the peak it reports as your
-          ‘center’. It takes under a minute; <kbd>f</kbd> again cancels. It needs you to already be within
-          ~0.5&nbsp;mm of the peak, so it refines the manual sweep rather than replacing it, and it is still
-          <strong>experimental</strong> — keep an eye on it.</div>
+          ‘center’. Once it lands close, press <kbd>g</kbd> for a second pass at 1/10th the range and step
+          (±0.05&nbsp;mm in 1&nbsp;µm steps) to further refine the centre. It takes under a minute; either
+          <kbd>f</kbd> or <kbd>g</kbd> cancels a running scan. It needs you to already be within ~0.5&nbsp;mm
+          of the peak, so it refines the manual sweep rather than replacing it.</div>
           <div class="note"><strong>Going back to a position later:</strong> write the centre down. Inside the
           visualizer, press <kbd>m</kbd> and type it to go straight back. With the visualizer <em>closed</em>,
           you can also drive the stage from a terminal:

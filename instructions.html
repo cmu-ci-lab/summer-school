@@ -613,6 +613,9 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li><kbd>w</kbd>&thinsp;/&thinsp;<kbd>s</kbd> — jog the stage forward/back by the <em>coarse</em> step; <em>hold <kbd>w</kbd> to sweep</em></li>
         <li><kbd>e</kbd>&thinsp;/&thinsp;<kbd>d</kbd> — jog forward/back by the <em>fine</em> step (coarse ÷ 10); hold <kbd>e</kbd> for a slow sweep</li>
         <li><kbd>[</kbd>&thinsp;/&thinsp;<kbd>]</kbd> — halve / double the coarse step size</li>
+        <li><kbd>m</kbd> — <em>move to</em> a position you type: press <kbd>m</kbd>, type the value in mm and
+        press <kbd>Enter</kbd> (a leading <kbd>+</kbd> or <kbd>-</kbd> moves <em>relative</em> to where you
+        are; <kbd>Esc</kbd> cancels). Handy for jumping straight back to a centre you found earlier</li>
         <li><kbd>+</kbd>&thinsp;/&thinsp;<kbd>-</kbd> — brighten / dim (exposure)</li>
         <li><kbd>f</kbd> — <em>fine scan</em>: once you have coarsely found the peak, steps ±0.5&nbsp;mm around
         the current position in 40&nbsp;µm steps, saves a contrast-vs-position plot (PNG + CSV) and moves the
@@ -836,6 +839,14 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
           ‘center’. It takes about 20&nbsp;s; <kbd>f</kbd> again cancels. It needs you to already be within
           ~0.5&nbsp;mm of the peak, so it refines the manual sweep rather than replacing it, and it is still
           <strong>experimental</strong> — keep an eye on it.</div>
+          <div class="note"><strong>Going back to a position later:</strong> write the centre down. Inside the
+          visualizer, press <kbd>m</kbd> and type it to go straight back. With the visualizer <em>closed</em>,
+          you can also drive the stage from a terminal:
+          <pre><code>python stage.py --to 3.75     # absolute, mm
+python stage.py --by -0.2     # relative
+python stage.py --status      # position + whether it has been homed</code></pre>
+          Only one program can hold the controller at a time, so quit the visualizer before using this (and
+          vice versa).</div>
           <p>When you are at the right depth, you should see this <strong>moving speckle</strong> inside the
           highlighted patch — the coin's rough surface makes the interference grainy and shimmering rather
           than smooth fringes:</p>

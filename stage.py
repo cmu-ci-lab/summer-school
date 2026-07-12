@@ -1,6 +1,44 @@
 import sys
-import time
-from pylablib.devices import Thorlabs
+
+# Guarded so this module stays importable (for TRAVEL_MM / resolve_target) on a
+# machine with no stage drivers — visualizer.py runs camera-only in that case.
+# Only connect() actually needs pylablib.
+try:
+    from pylablib.devices import Thorlabs
+except ImportError:
+    Thorlabs = None
+
+# Usable travel of the actuator (Z825 / LTS150 short axis). Single source of
+# truth — visualizer.py imports this rather than keeping its own copy.
+TRAVEL_MM = 25.0
+
+
+def resolve_target(text, current_mm, travel_mm=TRAVEL_MM):
+    """Parse a typed position into an absolute target in mm.
+
+    A leading '+' or '-' means a move RELATIVE to `current_mm` ("+0.2", "-1.5");
+    anything else is absolute ("3.75"). The two can't be confused, because a
+    negative absolute position is never valid.
+
+    Returns (target_mm, is_relative). Raises ValueError with a message meant to
+    be shown to the user if the text isn't a number, or the resulting position
+    would leave the travel range.
+    """
+    text = text.strip()
+    if not text:
+        raise ValueError("no position entered")
+    relative = text[0] in "+-"
+    try:
+        value = float(text)
+    except ValueError:
+        raise ValueError(f"'{text}' is not a number") from None
+    target = current_mm + value if relative else value
+    if not 0.0 <= target <= travel_mm:
+        where = f"{current_mm:.4f} {value:+g} = {target:.4f}" if relative \
+                else f"{target:.4f}"
+        raise ValueError(f"{where} mm is outside the travel range "
+                         f"(0 – {travel_mm:g} mm)")
+    return target, relative
 
 
 class ThorlabsStage:
@@ -19,6 +57,12 @@ class ThorlabsStage:
             stage.home()
             stage.move_to(10)        # 10 mm
             print(stage.position)    # mm
+
+    Also runnable as a CLI (only when nothing else holds the stage — the
+    controller allows a single connection, so quit visualizer.py first)::
+        python stage.py --to 3.75    # absolute move, mm
+        python stage.py --by -0.2    # relative move
+        python stage.py --status     # position + homing state
     """
 
     _UNIT_SCALE = {"m": 1.0, "mm": 1e3}   # pylablib uses metres; multiply to get user unit
@@ -37,6 +81,10 @@ class ThorlabsStage:
     # ------------------------------------------------------------------
 
     def connect(self):
+        if Thorlabs is None:
+            raise RuntimeError(
+                "pylablib is not installed — cannot talk to the stage.\n"
+                "Install the project environment (see setup.sh / environment.yml).")
         if sys.platform == "darwin":
             self._connect_macos()
         else:
@@ -136,6 +184,19 @@ class ThorlabsStage:
         self._stage.home(sync=wait)
         print(f"Homed. Position: {self.position:.4f} {self.units}")
 
+    def home_if_needed(self, wait: bool = True) -> bool:
+        """Home only if the controller hasn't been homed yet. Returns True if it did.
+
+        Absolute positions are meaningless until the stage has a datum, but
+        re-homing an already-homed stage just wastes a cycle and drives it back
+        to zero — so callers that only care about *being* homed use this.
+        """
+        if self.is_homed:
+            return False
+        print("Stage is not homed (absolute positions need a datum) — homing...")
+        self.home(wait=wait)
+        return True
+
     def move_to(self, position, wait: bool = True):
         """Move to absolute position in user units. Blocks if wait=True."""
         self._stage.move_to(position / self._scale)
@@ -164,17 +225,88 @@ class ThorlabsStage:
     def is_moving(self) -> bool:
         return self._stage.is_moving()
 
+    @property
+    def is_homed(self) -> bool:
+        """True if the controller has been homed since it was powered on.
+
+        Reads the APT 'homed' status bit, which the controller clears on power
+        cycle — so this answers "does the current position mean anything?".
+        """
+        return self._stage.is_homed()
+
     def wait_move(self):
         self._stage.wait_move()
 
 
 # ----------------------------------------------------------------------
-# Quick test when run directly
+# CLI — move the stage from a terminal
 # ----------------------------------------------------------------------
+def main():
+    import argparse
+
+    p = argparse.ArgumentParser(
+        description="Move the Thorlabs stage to a position, or report its state.",
+        epilog="Note: the controller can only be opened by ONE process, so this "
+               "cannot run while visualizer.py is holding the stage.")
+    what = p.add_mutually_exclusive_group(required=True)
+    what.add_argument("--to", type=float, metavar="MM",
+                      help=f"move to an absolute position in mm (0 – {TRAVEL_MM:g})")
+    what.add_argument("--by", type=float, metavar="MM",
+                      help="move by a relative distance in mm (may be negative)")
+    what.add_argument("--status", action="store_true",
+                      help="print the position and homing state; move nothing")
+    homing = p.add_mutually_exclusive_group()
+    homing.add_argument("--home", action="store_true",
+                        help="home first, even if the stage is already homed")
+    homing.add_argument("--no-home", action="store_true",
+                        help="never home, even if the stage has not been homed "
+                             "(the position will not be a true absolute)")
+    args = p.parse_args()
+
+    stage = ThorlabsStage(units="mm")
+    try:
+        stage.connect()
+    except Exception as e:
+        print(f"Could not connect to the stage: {e}")
+        if Thorlabs is not None:
+            # Drivers are present, so the likeliest cause is another process
+            # holding the device. The underlying FTDI open failure is opaque —
+            # say what it usually means.
+            print("If visualizer.py (or another script) is running, quit it "
+                  "first — the controller allows only one connection at a time.")
+        return 1
+
+    try:
+        print(f"Position: {stage.position:.4f} mm    "
+              f"homed: {'yes' if stage.is_homed else 'NO'}")
+        if args.status:
+            return 0
+
+        if args.home:
+            stage.home()
+        elif not args.no_home:
+            stage.home_if_needed()
+        elif not stage.is_homed:
+            print("Warning: stage is not homed and --no-home was given; the "
+                  "position below is relative to wherever it powered on.")
+
+        # Resolve both forms through the same parser the visualizer's typed
+        # entry uses, so the travel-range check can't disagree between them.
+        text = f"{args.by:+g}" if args.by is not None else f"{args.to:g}"
+        try:
+            target, relative = resolve_target(text, stage.position)
+        except ValueError as e:
+            print(f"Refusing to move: {e}")
+            return 1
+
+        kind = "by" if relative else "to"
+        print(f"Moving {kind} {text} mm → {target:.4f} mm ...")
+        stage.move_to(target)          # blocking: a CLI must not return early
+        print(f"Position: {stage.position:.4f} mm")
+        return 0
+    finally:
+        stage.release()
+
+
 if __name__ == "__main__":
-    with ThorlabsStage(units="mm") as stage:
-        stage.home()
-        for i in range(5):
-            stage.move_to(i * 2)
-            print(f"  position: {stage.position:.3f} mm")
-            time.sleep(0.3)
+    sys.exit(main())

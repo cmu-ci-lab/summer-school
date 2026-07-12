@@ -22,6 +22,9 @@ Controls:
                steps +/- 0.5 mm around the current position at 40 um, saves a
                contrast-vs-position plot (PNG + CSV) and moves the stage to the
                coherence peak (needs a patch; f again cancels)
+  m          : Move to a typed position — type the mm and press Enter (a
+               leading + or - moves relative to the current position; Esc
+               cancels). Outside the visualizer, use: python stage.py --to 3.75
   a          : Autoscale the plot (undo zoom/pan)
   c          : Clear the patch selection and the plot
   r          : Reset (clear) the plot data but keep the patch
@@ -45,6 +48,10 @@ import numpy as np
 from collections import deque
 import time
 
+# stage.py is importable without the drivers installed (pylablib is guarded
+# there), so these are safe even when running camera-only.
+from stage import TRAVEL_MM as STAGE_MAX_MM, resolve_target
+
 # Arrow-key codes vary by OS/GUI backend; match against all known up/down values
 # (macOS Qt, GTK, Windows). w/s are provided as backend-independent alternates.
 UP_KEYS   = {63232, 65362, 2490368, 82}
@@ -64,7 +71,6 @@ FINE_STEP_MM = 0.04           # 40 um
 FINE_DWELL_FRAMES = 4         # frames averaged at each step (stage parked, so this is free)
 FINE_MIN_STEPS = 5            # compute_fwhm needs >= 5 points to find an envelope
 FINE_STALL_FRAMES = 150       # ~5 s: give up on a target the stage never quite reaches
-STAGE_MAX_MM = 25.0           # stage travel (Z825 / LTS150 short axis) — clamps the sweep window
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
 # Dark-surface palette validated for CVD separation and contrast (dataviz
@@ -376,7 +382,12 @@ def connect_stage():
         stage = ThorlabsStage(units="mm")
         stage.connect()
         print("Stage connected — arrow keys (or w/s) move it.")
-        stage.home()
+        # Only home if the controller hasn't been homed since power-on: a
+        # restart mid-session shouldn't drive the stage back to 0 and cost a
+        # homing cycle when it already has a valid datum.
+        if not stage.home_if_needed():
+            print(f"Stage already homed — keeping position "
+                  f"{stage.position:.4f} mm.")
         return stage
     except Exception as e:
         print(f"No stage found ({e}); running camera-only.")
@@ -796,7 +807,7 @@ def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
         stage_s, color = "stage not found — camera only", TEXT_MUTED
     txt.put((width // 2, cy), stage_s, 16, color, "demi", anchor="mm")
 
-    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   f fine scan   c clear   a fit   q quit",
+    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   m go to   f fine scan   c clear   a fit   q quit",
             14, TEXT_2, "medium", anchor="rm")
     return bar
 
@@ -932,6 +943,9 @@ def main():
     # state machine inside the main loop so the preview keeps streaming and f
     # cancels. See start_scan() for the state shape.
     scan = None
+    # Typed position entry ('m'): None = normal keys; a string = what's been
+    # typed so far (a leading +/- makes it a relative move).
+    entry = None
     notice = None        # transient status-bar message: (text, expires_at)
     # plot_view["range"]: (xmin, xmax) zoom of the plot, None = auto-fit.
     # plot_view["drawn"]: the range actually rendered last frame (needed to map
@@ -1249,7 +1263,11 @@ def main():
             # Status-bar banner: fine-scan progress, or a transient notice.
             if notice is not None and now >= notice[1]:
                 notice = None
-            if scan is not None:
+            if entry is not None:
+                banner = (f"move to:  {entry}_   mm"
+                          "    (Enter to go · Esc to cancel · +/- for a "
+                          "relative move)", LIVE)
+            elif scan is not None:
                 banner = (f"FINE SCAN  {scan['i'] + 1}/{len(scan['targets'])}"
                           f"   target {scan['targets'][scan['i']]:.3f} mm"
                           "   (f cancels)", ACCENT)
@@ -1276,8 +1294,34 @@ def main():
             key = cv2.waitKeyEx(1)
             if key != -1:
                 k = key & 0xFF
+                # ── Typed position entry ('m'): consumes EVERY key while active.
+                # This must come first: the normal bindings below include s, d,
+                # e, w, -, [, ] and q, so without it typing "3.75" would jog the
+                # stage and typing a stray letter could quit the program.
+                if entry is not None:
+                    if k in (13, 10):                       # Enter — go
+                        try:
+                            target, rel = resolve_target(entry, pos_mm)
+                            stage.move_to(target, wait=False)
+                            notice = (f"moving to {target:.4f} mm", now + 4)
+                            print(f"Moving to {target:.4f} mm"
+                                  + (f" ({entry} from {pos_mm:.4f})" if rel else ""))
+                        except ValueError as e:
+                            notice = (f"move: {e}", now + 5)
+                            print(f"Move refused: {e}")
+                        except Exception as e:
+                            notice = (f"move failed: {e}", now + 5)
+                            print(f"Move failed: {e}")
+                        entry = None
+                    elif k == 27:                           # Esc — cancel
+                        entry = None
+                    elif k in (8, 127):                     # Backspace
+                        entry = entry[:-1]
+                    elif chr(k) in "0123456789." or (chr(k) in "+-" and not entry):
+                        entry += chr(k)                     # leading +/- = relative
+                    # anything else is ignored rather than acted on
                 # Stage: w/s (or arrows) = coarse; e/d = fine (coarse / FINE_RATIO).
-                if key in UP_KEYS or k == ord('w'):
+                elif key in UP_KEYS or k == ord('w'):
                     move_stage(+1)
                 elif key in DOWN_KEYS or k == ord('s'):
                     move_stage(-1)
@@ -1321,6 +1365,15 @@ def main():
                                       f"{n_steps} steps of "
                                       f"{fine_step * 1000:.0f} µm "
                                       f"(est ~{est_s:.0f}s). Press f to cancel.")
+                elif k == ord('m'):
+                    if stage is None:
+                        notice = ("no stage to move", now + 4)
+                    elif scan is not None:
+                        notice = ("finish or cancel the fine scan first", now + 4)
+                    elif pos_mm is None:
+                        notice = ("stage position unknown", now + 4)
+                    else:
+                        entry = ""      # every key now goes to the entry branch
                 elif k == ord('c'):
                     selector.clear()
                     amp.reset()

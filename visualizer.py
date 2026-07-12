@@ -18,9 +18,10 @@ Controls:
   click x2   : Select patch (first click anchors a corner, second finalizes)
   wheel      : (over the plot) zoom the position axis around the cursor
   left-drag  : (over the plot) pan the position axis
-  f          : Autofind — stepped sweep 0 → 25 mm at the coarse step, then
-               move to the amplitude peak (needs a patch; f again cancels;
-               refuses to start if the estimate exceeds 5 minutes)
+  f          : Fine scan — once coarse alignment has the peak roughly in view,
+               steps +/- 0.5 mm around the current position at 40 um, saves a
+               contrast-vs-position plot (PNG + CSV) and moves the stage to the
+               coherence peak (needs a patch; f again cancels)
   a          : Autoscale the plot (undo zoom/pan)
   c          : Clear the patch selection and the plot
   r          : Reset (clear) the plot data but keep the patch
@@ -35,6 +36,7 @@ Usage:
     python visualizer.py
     python visualizer.py --step 0.1 --window-mm 0.2
     python visualizer.py --binning 4 --exposure 10000
+    python visualizer.py --fine-range-mm 0.3 --fine-step-mm 0.02
 """
 
 import cv2
@@ -53,11 +55,16 @@ FINE_RATIO = 10
 
 MAX_POINTS = 5000         # cap on stored (position, amplitude) samples
 
-# Autofind ('f'): sweep the full stage travel at the coarse step, then move to
-# the amplitude peak. Refuse to start if the estimate exceeds the time budget.
-AUTOFIND_MAX_MM = 25.0        # stage travel (Z825 / LTS150 short axis)
-AUTOFIND_BUDGET_S = 300       # 5 minutes
-AUTOFIND_DWELL_FRAMES = 3     # frames to sit at each step so the amplitude updates
+# Fine scan ('f'): stepped sweep around the CURRENT position — i.e. after the
+# reference arm has been coarsely aligned by hand — measuring the patch contrast
+# at each step. Ends by saving a contrast-vs-position plot and moving the stage
+# to the coherence peak.
+FINE_RANGE_MM = 0.5           # half-width of the sweep (+/- this around the current position)
+FINE_STEP_MM = 0.04           # 40 um
+FINE_DWELL_FRAMES = 4         # frames averaged at each step (stage parked, so this is free)
+FINE_MIN_STEPS = 5            # compute_fwhm needs >= 5 points to find an envelope
+FINE_STALL_FRAMES = 150       # ~5 s: give up on a target the stage never quite reaches
+STAGE_MAX_MM = 25.0           # stage travel (Z825 / LTS150 short axis) — clamps the sweep window
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
 # Dark-surface palette validated for CVD separation and contrast (dataviz
@@ -520,6 +527,61 @@ def compute_fwhm(px, py):
     return right - left, left, right, half, floor, (left + right) / 2.0
 
 
+def save_contrast_plot(px, py, peak_pos, fwhm_res, step_mm, cam):
+    """Save the fine scan as a contrast-vs-position PNG (+ a CSV of the data).
+
+    Matplotlib MUST be pinned to the non-interactive Agg backend before pyplot
+    is imported: this process already hosts an OpenCV Qt GUI, and a default
+    import picks the macosx backend, which spins up a second NSApplication in
+    the same process — the toolkit collision that get_screen_size() documents
+    (NSException / abort trap). Agg is pure raster: no toolkit, no event loop.
+    The import is lazy so a plain live-view session never pays for it.
+
+    Returns the Path of the PNG.
+    """
+    import matplotlib
+    matplotlib.use("Agg", force=True)          # must precede the pyplot import
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+
+    save_dir = Path(getattr(cam, "save_dir", "live_view_captures"))
+    save_dir.mkdir(parents=True, exist_ok=True)
+    path = save_dir / cam.timestamped_filename(prefix="fine_scan", ext="png")
+
+    def hexc(bgr):                             # theme colors are BGR, pyplot wants RGB
+        b, g, r = bgr
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(px, py, "-o", ms=3, lw=1.2, color=hexc(SERIES),
+            label="contrast  mean |I − DC|")
+    ax.axvline(peak_pos, color=hexc(ACCENT), ls="--", lw=1.2,
+               label=f"peak {peak_pos:.4f} mm")
+    title = (f"Fine scan · {len(px)} steps of {step_mm * 1000:.0f} µm "
+             f"({px[0]:.3f}–{px[-1]:.3f} mm)")
+    if fwhm_res is not None:
+        width, lx, rx, half, floor, _ = fwhm_res
+        ax.hlines(half, lx, rx, color=hexc(ACCENT), lw=1.2)
+        ax.axhline(floor, color="#999999", ls=":", lw=0.8, label="floor")
+        ax.annotate(f"FWHM = {width * 1000:.1f} µm", ((lx + rx) / 2, half),
+                    textcoords="offset points", xytext=(0, 8), ha="center",
+                    color=hexc(ACCENT))
+        title += f"  ·  coherence FWHM {width * 1000:.1f} µm"
+    ax.set_xlabel("stage position (mm)")
+    ax.set_ylabel("contrast  mean |I − DC|  (counts)")
+    ax.set_title(title)
+    ax.grid(alpha=0.25)
+    ax.legend(frameon=False, fontsize=9)
+    fig.savefig(path, bbox_inches="tight", dpi=150)
+    plt.close(fig)
+
+    csv_path = path.with_suffix(".csv")
+    csv_path.write_text("position_mm,contrast\n"
+                        + "".join(f"{x:.6f},{y:.6f}\n" for x, y in zip(px, py)))
+    print(f"Saved: {path}\nSaved: {csv_path}")
+    return path
+
+
 def _dashed_line(img, p0, p1, color, dash=5, gap=4, thickness=1):
     """Draw a dashed line segment (cv2 has no native dashes)."""
     p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
@@ -708,7 +770,7 @@ def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
     """Full-width bottom status bar: camera stats left, stage centre, keys right.
 
     `banner` is an optional (text, color) that replaces the centre stage text —
-    used for autofind progress and transient notices.
+    used for fine-scan progress and transient notices.
     """
     bar = np.full((STATUS_H, width, 3), SURFACE_2, np.uint8)
     cv2.line(bar, (0, 0), (width, 0), GRID, 1)
@@ -734,7 +796,7 @@ def render_status(txt, width, exposure_us, gamma, fps, binning, stage_ok,
         stage_s, color = "stage not found — camera only", TEXT_MUTED
     txt.put((width // 2, cy), stage_s, 16, color, "demi", anchor="mm")
 
-    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   f find   c clear   a fit   q quit",
+    txt.put((width - 20, cy), "hold w/e sweep   s/d back   [ ] step   f fine scan   c clear   a fit   q quit",
             14, TEXT_2, "medium", anchor="rm")
     return bar
 
@@ -761,8 +823,16 @@ def main():
                              "within +/- this distance of the current position "
                              "are averaged (default 0.2). With no stage it is "
                              "interpreted in frames.")
+    parser.add_argument("--fine-range-mm", type=float, default=FINE_RANGE_MM,
+                        help="half-width in mm of the 'f' fine scan around the "
+                             f"current position (default {FINE_RANGE_MM:g}, i.e. "
+                             "a 1 mm sweep)")
+    parser.add_argument("--fine-step-mm", type=float, default=FINE_STEP_MM,
+                        help="step size in mm of the 'f' fine scan "
+                             f"(default {FINE_STEP_MM:g} = 40 um)")
     args = parser.parse_args()
     gamma = args.gamma
+    fine_range, fine_step = args.fine_range_mm, args.fine_step_mm
 
     # Default exposure: pick up where the last session left off (the value is
     # saved to last_exposure.json on every adjustment).
@@ -857,16 +927,81 @@ def main():
     # arrays + FWHM against it so they aren't recomputed every frame.
     samples_version = 0
     panel_cache = {}
-    # Autofind ('f'): non-blocking stepped sweep 0 → AUTOFIND_MAX_MM at the
-    # coarse step, then move to the amplitude peak. Runs as a state machine
-    # inside the main loop so the preview keeps streaming and f cancels.
-    autofind = None      # {"targets": [...], "i": int, "dwell": int} or None
+    # Fine scan ('f'): non-blocking stepped sweep around the current position,
+    # then save the contrast plot and move to the coherence peak. Runs as a
+    # state machine inside the main loop so the preview keeps streaming and f
+    # cancels. See start_scan() for the state shape.
+    scan = None
     notice = None        # transient status-bar message: (text, expires_at)
     # plot_view["range"]: (xmin, xmax) zoom of the plot, None = auto-fit.
     # plot_view["drawn"]: the range actually rendered last frame (needed to map
     # panel pixels back to data coordinates for wheel-zoom / drag-pan).
     plot_view = {"range": None, "drawn": None, "drag": None}
     disp_state = {"scale": 1.0, "img_w": 0, "img_h": 0}
+
+    def start_scan(targets, step):
+        """Clear the plot and begin a stepped sweep. Returns the state, or None.
+
+        `tol` is stored per-scan and derived from THIS scan's step: the arrival
+        test must not be scaled by the coarse jog step, which can be an order of
+        magnitude larger than a fine step (every target would then read as
+        "arrived" immediately and the sweep would record garbage).
+        """
+        nonlocal samples_version, last_coord, live_val
+        samples.clear()               # the panel then shows only the fine curve
+        samples_version += 1          # render_panel's cache keys off this
+        amp.reset()
+        last_coord = None
+        live_val = None
+        plot_view["range"] = None
+        st = {"targets": targets, "i": 0, "dwell": 0, "stall": 0, "step": step,
+              "tol": max(step / 4, 5e-4),
+              "acc": [],              # live values seen during the current dwell
+              "values": []}           # one (position, contrast) per completed step
+        try:
+            stage.move_to(targets[0], wait=False)
+        except Exception as e:
+            print(f"Fine scan start failed: {e}")
+            return None
+        return st
+
+    def finish_scan(st, now):
+        """End of sweep: pick the peak, move there, save the plot. Returns a notice."""
+        if len(st["values"]) < 2:
+            print("Fine scan: no samples collected.")
+            return ("fine scan: no samples collected", now + 5)
+        vals = sorted(st["values"])
+        px = np.array([p for p, _ in vals])
+        py = np.array([a for _, a in vals])
+
+        # The envelope centre (midpoint of the half-max crossings) is more
+        # robust than the argmax, which a single shot-noisy frame can win. It
+        # only exists when the sweep actually brackets the peak; if it doesn't,
+        # fall back to the best sample seen and say so.
+        res = compute_fwhm(px, py)
+        if res is not None:
+            peak_pos, how = float(res[5]), "envelope centre"
+        else:
+            peak_pos, how = float(px[int(np.argmax(py))]), "argmax"
+        peak_pos = float(np.clip(peak_pos, 0.0, STAGE_MAX_MM))
+
+        # Issue the move BEFORE rendering the plot so the motion overlaps
+        # matplotlib's first-import cost (a few hundred ms).
+        try:
+            stage.move_to(peak_pos, wait=False)
+        except Exception as e:
+            print(f"Fine scan: move to peak failed: {e}")
+        msg = f"fine scan: peak at {peak_pos:.4f} mm ({how}) — moving there"
+        print(f"Fine scan: peak at {peak_pos:.4f} mm via {how}; moving there.")
+        if res is not None:
+            print(f"Coherence FWHM: {res[0] * 1000:.1f} µm")
+
+        try:
+            path = save_contrast_plot(px, py, peak_pos, res, st["step"], cam)
+            msg += f"  ·  saved {path.name}"
+        except Exception as e:
+            print(f"Could not save the contrast plot: {e}")
+        return (msg, now + 8)
 
     def panel_to_data(panel_x):
         """Map an x pixel inside the plot panel to a data (stage) coordinate."""
@@ -944,6 +1079,18 @@ def main():
     print(f"Initial exposure: {exposure_us} µs (non-binned equivalent)  |  "
           f"coarse step: {coarse_mm:g} mm, fine: {coarse_mm / FINE_RATIO:g} mm  |  "
           f"positional window: +/-{window:g} {'mm' if stage is not None else 'frames'}")
+    if stage is not None:
+        print(f"f = fine scan: +/-{fine_range:g} mm around the current position "
+              f"in {fine_step * 1000:.0f} µm steps, saves a contrast plot and "
+              "moves to the peak (coarse-align first).")
+        # The DC estimate averages patches within +/-window of the current
+        # position. Shrink that toward the step size and the DC starts tracking
+        # the fringe itself, flattening the very peak the scan is measuring.
+        if window < 5 * fine_step:
+            print(f"Warning: --window-mm {window:g} is only "
+                  f"{window / fine_step:.1f} fine steps wide; the DC estimate "
+                  f"will track the fringe and flatten the fine-scan peak. "
+                  f"Use >= {5 * fine_step:g}.")
 
     # FPS measured over a window. When streaming, count real frames delivered by
     # the camera (the loop itself runs faster than frames arrive).
@@ -1015,40 +1162,41 @@ def main():
                             samples_version += 1
                         last_coord = coord
 
-            # ── Autofind state machine: step, dwell, advance; finish at peak ──
-            if autofind is not None and stage is not None:
-                tgt = autofind["targets"][autofind["i"]]
+            # ── Fine scan state machine: step, dwell, record, advance ──
+            if scan is not None and stage is not None:
+                tgt = scan["targets"][scan["i"]]
                 arrived = (pos_mm is not None and not moving
-                           and abs(pos_mm - tgt) < max(coarse_mm / 4, 5e-4))
+                           and abs(pos_mm - tgt) < scan["tol"])
+                scan["stall"] = 0 if arrived else scan["stall"] + 1
                 if arrived:
-                    autofind["dwell"] += 1
-                    # Sit a few frames so PatchAmplitude gets >=2 in-window
-                    # samples and the amplitude at this step is recorded.
-                    if autofind["dwell"] >= AUTOFIND_DWELL_FRAMES:
-                        autofind["i"] += 1
-                        autofind["dwell"] = 0
-                        try:
-                            if autofind["i"] < len(autofind["targets"]):
-                                stage.move_to(autofind["targets"][autofind["i"]],
-                                              wait=False)
-                            else:
-                                # Sweep done — go to the amplitude peak.
-                                if samples:
-                                    peak_pos = max(samples.values(),
-                                                   key=lambda pv: pv[1])[0]
-                                    stage.move_to(peak_pos, wait=False)
-                                    notice = (f"autofind: peak at {peak_pos:.4f} mm"
-                                              " — moving there", now + 6)
-                                    print(f"Autofind: peak amplitude at "
-                                          f"{peak_pos:.4f} mm; moving there.")
-                                else:
-                                    notice = ("autofind: no samples collected",
-                                              now + 5)
-                                plot_view["range"] = None
-                                autofind = None
-                        except Exception as e:
-                            print(f"Autofind move failed: {e}")
-                            autofind = None
+                    scan["dwell"] += 1
+                    if live_val is not None:
+                        scan["acc"].append(live_val)
+                # Advance once the dwell is done, or give up on a target the
+                # stage never settles inside of (tol is only ~10 µm, so a step
+                # that lands just outside it would otherwise hang the scan).
+                stalled = scan["stall"] > FINE_STALL_FRAMES
+                if (arrived and scan["dwell"] >= FINE_DWELL_FRAMES) or stalled:
+                    if stalled:
+                        print(f"Fine scan: stage never settled at {tgt:.4f} mm; "
+                              "skipping that step.")
+                    # Record the dwell-averaged contrast at the position actually
+                    # measured (not the commanded target).
+                    if scan["acc"]:
+                        scan["values"].append((pos_mm, float(np.mean(scan["acc"]))))
+                    scan["i"] += 1
+                    scan["dwell"] = scan["stall"] = 0
+                    scan["acc"] = []
+                    try:
+                        if scan["i"] < len(scan["targets"]):
+                            stage.move_to(scan["targets"][scan["i"]], wait=False)
+                        else:
+                            notice = finish_scan(scan, now)
+                            plot_view["range"] = None
+                            scan = None
+                    except Exception as e:
+                        print(f"Fine scan move failed: {e}")
+                        scan = None
 
             # Scale down to fit the screen while preserving aspect ratio.
             # Resize the single-channel image, THEN expand to BGR — at full
@@ -1098,12 +1246,12 @@ def main():
                                         version=samples_version)
             plot_view["drawn"] = drawn
             canvas = np.hstack([frame_rgb, panel])
-            # Status-bar banner: autofind progress, or a transient notice.
+            # Status-bar banner: fine-scan progress, or a transient notice.
             if notice is not None and now >= notice[1]:
                 notice = None
-            if autofind is not None:
-                banner = (f"AUTOFIND  {autofind['i'] + 1}/{len(autofind['targets'])}"
-                          f"   target {autofind['targets'][autofind['i']]:.3f} mm"
+            if scan is not None:
+                banner = (f"FINE SCAN  {scan['i'] + 1}/{len(scan['targets'])}"
+                          f"   target {scan['targets'][scan['i']]:.3f} mm"
                           "   (f cancels)", ACCENT)
             elif notice is not None:
                 banner = (notice[0], ACCENT)
@@ -1138,49 +1286,41 @@ def main():
                 elif k == ord('d'):
                     move_stage(-1, fine=True)
                 elif k == ord('f'):
-                    if autofind is not None:
-                        autofind = None
-                        notice = ("autofind cancelled", now + 3)
-                        print("Autofind cancelled.")
+                    if scan is not None:
+                        scan = None
+                        notice = ("fine scan cancelled", now + 3)
+                        print("Fine scan cancelled.")
                     elif stage is None:
-                        notice = ("autofind needs a stage", now + 4)
+                        notice = ("fine scan needs a stage", now + 4)
                     elif selector.rect is None:
-                        notice = ("autofind: select a patch first (two clicks)",
+                        notice = ("fine scan: select a patch first (two clicks)",
                                   now + 4)
+                    elif pos_mm is None or moving:
+                        # The window is anchored to the current position, and a
+                        # mid-move poll is up to 100 ms stale.
+                        notice = ("fine scan: wait for the stage to stop", now + 4)
                     else:
-                        n_steps = int(AUTOFIND_MAX_MM / coarse_mm) + 1
-                        # Time estimate: dwell frames + ~0.2 s move/settle
-                        # per step (short KDC101 moves are dominated by
-                        # settling, not travel).
-                        est_s = n_steps * (AUTOFIND_DWELL_FRAMES
-                                           / max(fps, 1.0) + 0.2)
-                        if est_s > AUTOFIND_BUDGET_S:
-                            notice = (f"autofind would take too long "
-                                      f"(~{est_s / 60:.0f} min at step "
-                                      f"{coarse_mm:g} mm) — increase the step "
-                                      "with ]", now + 6)
-                            print(f"Autofind refused: ~{est_s / 60:.1f} min at "
-                                  f"step {coarse_mm:g} mm exceeds the "
-                                  f"{AUTOFIND_BUDGET_S / 60:.0f} min budget. "
-                                  "Increase the coarse step with ] and retry.")
+                        # Clamp into the travel range: a scan near an end becomes
+                        # asymmetric rather than commanding an invalid target.
+                        lo = max(0.0, pos_mm - fine_range)
+                        hi = min(STAGE_MAX_MM, pos_mm + fine_range)
+                        n_steps = int(round((hi - lo) / fine_step)) + 1
+                        if n_steps < FINE_MIN_STEPS:
+                            notice = ("fine scan: too close to a travel limit",
+                                      now + 5)
+                            print(f"Fine scan refused: only {n_steps} steps fit "
+                                  f"between {lo:.3f} and {hi:.3f} mm.")
                         else:
-                            samples.clear()
-                            samples_version += 1
-                            amp.reset()
-                            last_coord = None
-                            plot_view["range"] = None
-                            autofind = {"targets": [i * coarse_mm
-                                                    for i in range(n_steps)],
-                                        "i": 0, "dwell": 0}
-                            try:
-                                stage.move_to(0.0, wait=False)
-                                print(f"Autofind: sweeping 0 → "
-                                      f"{AUTOFIND_MAX_MM:g} mm in {n_steps} "
-                                      f"steps of {coarse_mm:g} mm "
-                                      f"(est ≥{est_s:.0f}s). Press f to cancel.")
-                            except Exception as e:
-                                print(f"Autofind start failed: {e}")
-                                autofind = None
+                            targets = [min(lo + i * fine_step, hi)
+                                       for i in range(n_steps)]
+                            est_s = n_steps * (FINE_DWELL_FRAMES
+                                               / max(fps, 1.0) + 0.3)
+                            scan = start_scan(targets, fine_step)
+                            if scan is not None:
+                                print(f"Fine scan: {lo:.3f} → {hi:.3f} mm in "
+                                      f"{n_steps} steps of "
+                                      f"{fine_step * 1000:.0f} µm "
+                                      f"(est ~{est_s:.0f}s). Press f to cancel.")
                 elif k == ord('c'):
                     selector.clear()
                     amp.reset()
@@ -1190,7 +1330,7 @@ def main():
                     fallback_idx = 0
                     live_val = None
                     plot_view["range"] = None
-                    autofind = None
+                    scan = None
                     print("Patch selection cleared.")
                 elif k == ord('r'):
                     samples.clear()

@@ -11,6 +11,7 @@ venv/
 coin_captures_*/
 test_captures/
 setupA_test/
+live_view_captures/
 
 # ...but the compressed guide videos are doc assets, keep them
 !instructions_media/*.mp4

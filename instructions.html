@@ -608,8 +608,9 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         <li><kbd>e</kbd>&thinsp;/&thinsp;<kbd>d</kbd> — jog forward/back by the <em>fine</em> step (coarse ÷ 10); hold <kbd>e</kbd> for a slow sweep</li>
         <li><kbd>[</kbd>&thinsp;/&thinsp;<kbd>]</kbd> — halve / double the coarse step size</li>
         <li><kbd>+</kbd>&thinsp;/&thinsp;<kbd>-</kbd> — brighten / dim (exposure)</li>
-        <li><kbd>f</kbd> — <em>autofind</em>: automatically sweeps the full stage travel at the coarse step,
-        then moves to the peak it found <span class="ph">(experimental — keep an eye on it)</span></li>
+        <li><kbd>f</kbd> — <em>fine scan</em>: once you have coarsely found the peak, steps ±0.5&nbsp;mm around
+        the current position in 40&nbsp;µm steps, saves a contrast-vs-position plot (PNG + CSV) and moves the
+        stage to the peak <span class="ph">(experimental — keep an eye on it)</span></li>
         <li><kbd>a</kbd> — autoscale the plot (undo zoom/pan)</li>
         <li><kbd>c</kbd> — clear the patch selection <em>and</em> the plot</li>
         <li><kbd>r</kbd> — reset the plot but keep the patch</li>
@@ -733,10 +734,7 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         </li>
         <li>Do a <strong>full sweep</strong> of the stage: move it close to 0&nbsp;mm, then <em>hold</em>
         <kbd>w</kbd> to sweep continuously all the way up to ~25&nbsp;mm (the end of travel). Use a step that
-        is neither too small nor too large — around 0.3–0.5&nbsp;mm.
-          <div class="note"><strong>Shortcut:</strong> pressing <kbd>f</kbd> does this full sweep for you
-          (autofind) and moves to the peak it found — but it's <em>experimental</em>, so keep an eye on it
-          and fall back to sweeping manually if it misbehaves.</div> Too small and the sweep takes forever;
+        is neither too small nor too large — around 0.3–0.5&nbsp;mm. Too small and the sweep takes forever;
         too large and you can step clean over the region where the interference appears. Somewhere along the
         sweep the pathlengths match: you will see the fringes appear in the live view, and a
         <strong>sharp peak</strong> in the panel.
@@ -823,12 +821,15 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         (hold <kbd>w</kbd>, repositioning with <kbd>s</kbd> as needed) once again, over a length comparable to the error due to the difference
         in thickness of the coin and the mirror (1–2&nbsp;mm). The peak in the coherence panel gives you a
         ‘center’ position around which we will perform the scan.
-          <div class="warn"><strong>!! If you really can't find the peak:</strong> the visualizer has an
-          <em>autofind</em> — press <kbd>f</kbd> (with a patch selected) and it sweeps the full stage travel
-          at the coarse step, then moves to the position of maximum amplitude. It refuses to start if the
-          sweep would take more than ~5 minutes (make the step bigger with <kbd>]</kbd>). It is
-          <strong>very experimental</strong> right now, so it might not work — treat it as a last resort, not
-          a substitute for the manual sweep. <kbd>f</kbd> again cancels.</div>
+          <div class="note"><strong>Refine it automatically:</strong> once the manual sweep has the peak
+          roughly in view, press <kbd>f</kbd> (with a patch selected) for a <em>fine scan</em> — it steps
+          ±0.5&nbsp;mm around the current position in 40&nbsp;µm steps, measuring the contrast of your patch
+          at each step, then <strong>moves the stage to the peak</strong> and saves a contrast-vs-position
+          plot to <code>live_view_captures/</code> (a PNG plus the raw CSV). The plot also reports the
+          <strong>coherence length</strong> — the FWHM of the envelope. Use the peak it reports as your
+          ‘center’. It takes about 20&nbsp;s; <kbd>f</kbd> again cancels. It needs you to already be within
+          ~0.5&nbsp;mm of the peak, so it refines the manual sweep rather than replacing it, and it is still
+          <strong>experimental</strong> — keep an eye on it.</div>
           <p>When you are at the right depth, you should see this <strong>moving speckle</strong> inside the
           highlighted patch — the coin's rough surface makes the interference grainy and shimmering rather
           than smooth fringes:</p>

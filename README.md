@@ -5,7 +5,7 @@ interference fringes, and use it as a time-domain OCT scanner to recover a depth
 
 ## Where to start
 
-**Follow [`instructions.html`](instructions.html) for the guide.** It walks through the full
+**Follow the guide at [cmu-ci-lab.github.io/summer-school](https://cmu-ci-lab.github.io/summer-school/)** (or open [`index.html`](index.html) locally). It walks through the full
 lab — construction, alignment, and OCT scanning — with photos and videos of every step.
 Open it in a browser after cloning (it loads its media from `instructions_media/`, so keep
 the two together):
@@ -13,7 +13,7 @@ the two together):
 ```bash
 git clone https://github.com/cmu-ci-lab/summer-school.git
 cd summer-school
-open instructions.html        # macOS; on Windows just double-click it
+open index.html               # macOS; on Windows just double-click it
 ```
 
 ## Quick start (software only)

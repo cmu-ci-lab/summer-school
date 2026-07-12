@@ -606,13 +606,19 @@ python visualizer.py --step 0.01 --window-mm 0.2</code></pre>
         current stage position and the coarse&thinsp;/&thinsp;fine step sizes in the middle; key hints on the
         right.</li>
         <li><strong>⑤ Selected patch.</strong> The blue box marks the patch whose interference amplitude the
-        panel is tracking.</li>
+        panel is tracking. The panel also shows that patch <em>magnified</em>, between the stat tiles and the
+        plot, so you can see the fringes and speckle at sensor resolution instead of squinting at the small
+        box on the live view. Press <kbd>i</kbd> if the fringes are too faint to make out.</li>
       </ul>
       <p><strong>Keyboard controls:</strong></p>
       <ul class="plain">
         <li><kbd>w</kbd>&thinsp;/&thinsp;<kbd>s</kbd> — jog the stage forward/back by the <em>coarse</em> step; <em>hold <kbd>w</kbd> to sweep</em></li>
         <li><kbd>e</kbd>&thinsp;/&thinsp;<kbd>d</kbd> — jog forward/back by the <em>fine</em> step (coarse ÷ 10); hold <kbd>e</kbd> for a slow sweep</li>
         <li><kbd>[</kbd>&thinsp;/&thinsp;<kbd>]</kbd> — halve / double the coarse step size</li>
+        <li><kbd>i</kbd> — toggle <em>auto-contrast</em> on the magnified patch shown in the panel. The stretch
+        makes faint fringes visible, but it exaggerates contrast and hides how close you are to saturation —
+        the inset is labelled <code>i: auto-contrast</code> whenever it is on, so check that before you judge
+        exposure</li>
         <li><kbd>m</kbd> — <em>move to</em> a position you type: press <kbd>m</kbd>, type the value in mm and
         press <kbd>Enter</kbd> (a leading <kbd>+</kbd> or <kbd>-</kbd> moves <em>relative</em> to where you
         are; <kbd>Esc</kbd> cancels). Handy for jumping straight back to a centre you found earlier</li>

@@ -6,9 +6,10 @@ Successor to live_view_coherence.py with a redesigned interface: dark theme,
 Avenir (or the closest geometric face installed) for all text via Pillow, stat
 tiles for the live readouts, and a cleaner plot.
 
-Select a rectangular patch with two clicks; its interference amplitude (the
-compute_mean_diff measure: mean |frame - local mean| over the patch) is plotted
-against stage position. The local (DC) mean is positional — patches captured
+Select a rectangular patch with two clicks; it is shown magnified in the panel
+(so fringes and speckle are legible at sensor resolution) and its interference
+amplitude (the compute_mean_diff measure: mean |frame - local mean| over the
+patch) is plotted against stage position. The local (DC) mean is positional — patches captured
 within +/- --window-mm of the current stage position — so irregular stage
 motion is handled naturally, and the plot keeps exactly one value per position.
 Once the envelope crosses half-max on both sides of the peak, the coherence
@@ -25,6 +26,9 @@ Controls:
   m          : Move to a typed position — type the mm and press Enter (a
                leading + or - moves relative to the current position; Esc
                cancels). Outside the visualizer, use: python stage.py --to 3.75
+  i          : Toggle auto-contrast on the magnified patch inset (percentile
+               stretch — makes faint fringes visible, but exaggerates contrast
+               and hides how close the patch is to saturation)
   a          : Autoscale the plot (undo zoom/pan)
   c          : Clear the patch selection and the plot
   r          : Reset (clear) the plot data but keep the patch
@@ -96,6 +100,8 @@ PB_X1     = PLOT_W - 28         # plot box right edge
 HEADER_H  = 58                  # title block above the tiles
 TILES_H   = 84                  # stat-tile row height
 STATUS_H  = 52                  # bottom status bar (full canvas width)
+INSET_H   = 240                 # magnified-patch section, between tiles and plot
+MIN_PLOT_H = 140                # drop the inset rather than squeeze the plot below this
 
 
 class Text:
@@ -437,6 +443,23 @@ class PatchSelector:
         return (x0, y0, max(x1, x0 + 2), max(y1, y0 + 2))
 
 
+def clip_rect(rect, shape):
+    """Clip a frame-coordinate (x0, y0, x1, y1) to the image bounds.
+
+    Returns the clipped rect, or None if it lands outside the frame or is
+    smaller than the 2x2 the amplitude measure needs.
+    """
+    if rect is None:
+        return None
+    x0, y0, x1, y1 = rect
+    fh, fw = shape[:2]
+    x0, x1 = (int(v) for v in np.clip((x0, x1), 0, fw))
+    y0, y1 = (int(v) for v in np.clip((y0, y1), 0, fh))
+    if x1 - x0 < 2 or y1 - y0 < 2:
+        return None
+    return x0, y0, x1, y1
+
+
 class PatchAmplitude:
     """Position-windowed interference amplitude of a patch.
 
@@ -624,11 +647,91 @@ def _tile(panel, txt, x, y, w, h, label, value, unit, color=TEXT_1):
                 anchor="ls")
 
 
+def stretch_patch(crop, gamma, max_side=600):
+    """Percentile-stretch a RAW crop to 8-bit so faint fringes are visible.
+
+    The 2nd–98th percentile of the crop is mapped to 0–255, then the display
+    gamma is applied. Working from the RAW crop (not the already-gamma'd 8-bit
+    display image) matters: stretching after quantization can only rescale the
+    few levels a dim patch survived with, while stretching the full-depth data
+    recovers detail that was there all along — a fringe pattern spanning one
+    grey level in the normal view comes back as a full-range image.
+
+    Oversized crops are decimated first. The normalize + gamma below is
+    per-pixel, and on a 1200x1200 selection it costs ~20 ms — most of the 33 ms
+    frame budget — to compute detail that cannot be shown, since the inset box
+    is only ~464 px wide and would shrink it anyway.
+    """
+    step = max(1, max(crop.shape) // max_side)
+    if step > 1:
+        crop = crop[::step, ::step]
+    lo, hi = np.percentile(crop, (2, 98))
+    if hi <= lo:              # percentiles coincide (flat, or constant + outlier)
+        lo, hi = float(crop.min()), float(crop.max())
+        if hi <= lo:                               # genuinely flat
+            return np.zeros(crop.shape, np.uint8)
+    norm = ((crop.astype(np.float32) - lo) / (hi - lo)).clip(0.0, 1.0)
+    if gamma > 0 and gamma != 1.0:
+        norm = np.power(norm, 1.0 / gamma, dtype=np.float32)
+    return (norm * 255.0).astype(np.uint8)
+
+
+def fit_scale(cw, ch, bw, bh):
+    """Scale factor that fits a cw x ch crop inside a bw x bh box, aspect preserved."""
+    if cw <= 0 or ch <= 0:
+        return 1.0
+    return min(bw / cw, bh / ch)
+
+
+def render_inset(panel, txt, crop8, x, y, w, h, auto, patch_wh):
+    """Draw the magnified patch into the panel's inset box at (x, y, w, h).
+
+    `patch_wh` is the TRUE selected size in sensor pixels — crop8 may have been
+    decimated by stretch_patch, so the label and the magnification factor have
+    to come from the real selection, not from the array being drawn.
+    """
+    txt.put((x, y), "PATCH", 10, TEXT_MUTED, "medium")
+    # The stretch state lives on the label, not in the status bar: the bar's key
+    # hint is already the widest thing in it, and the hint belongs next to the
+    # thing it affects. It must always be visible when auto is on — a stretched
+    # view exaggerates contrast and hides how close the patch is to saturation.
+    txt.put((x + w, y), "i: auto-contrast" if auto else "i: true levels",
+            10, LIVE if auto else TEXT_MUTED, "medium", anchor="ra")
+
+    box_y = y + 18                       # image area, below the label row
+    box_h = h - 18
+    ch, cw = crop8.shape[:2]
+    s = fit_scale(cw, ch, w, box_h)
+    dw, dh = max(int(cw * s), 1), max(int(ch * s), 1)
+    # Magnifying: NEAREST shows true sensor pixels (blocky), which is the point —
+    # a smooth interpolation would invent detail and blur the fringes away.
+    interp = cv2.INTER_NEAREST if s >= 1.0 else cv2.INTER_AREA
+    big = cv2.resize(crop8, (dw, dh), interpolation=interp)
+    if big.ndim == 2:
+        big = cv2.cvtColor(big, cv2.COLOR_GRAY2BGR)
+
+    ox = x + (w - dw) // 2               # centre it in the box
+    oy = box_y + (box_h - dh) // 2
+    panel[oy:oy + dh, ox:ox + dw] = big
+    # Same blue as the finalized patch rectangle on the image, so the inset and
+    # the box it came from read as the same object.
+    cv2.rectangle(panel, (ox - 1, oy - 1), (ox + dw, oy + dh), SERIES, 1)
+
+    # Size and zoom are quoted against the true selection, not the (possibly
+    # decimated) array above.
+    pw, ph = patch_wh
+    txt.put((x, y + h - 2), f"{pw}×{ph} px  ·  {dw / max(pw, 1):.1f}×", 10,
+            TEXT_MUTED, anchor="ls")
+
+
 def render_panel(txt, points, height, live_val=None, current_pos=None,
-                 view=None, has_stage=True, cache=None, version=None):
-    """Render the right-hand panel: header, stat tiles, and the plot.
+                 view=None, has_stage=True, cache=None, version=None,
+                 inset=None, inset_auto=False, inset_px=None):
+    """Render the right-hand panel: header, stat tiles, magnified patch, plot.
 
     `points` is a sequence of (position, amplitude), one value per position.
+    `inset` is an 8-bit crop of the selected patch (already stretched or not),
+    drawn magnified between the tiles and the plot; None = no patch selected.
     `view` is an optional (xmin, xmax) zoom range; None = auto-fit all data.
     `cache`/`version`: samples change far less often than frames render, so
     the caller passes a dict and a counter it bumps on every samples mutation;
@@ -675,9 +778,19 @@ def render_panel(txt, points, height, live_val=None, current_pos=None,
     _tile(panel, txt, 28 + tw + 12, ty, tw, 62, "peak", peak_s, pu, ACCENT)
     _tile(panel, txt, 28 + 2 * (tw + 12), ty, tw, 62, "amplitude", live_s, "", SERIES)
 
-    # ── Plot box ──
-    top = HEADER_H + TILES_H
+    # ── Magnified patch ──
+    # Skipped entirely on a short panel rather than crushing the plot below a
+    # usable height (a small sensor or a small window makes the panel short).
     bot = height - 34
+    inset_h = 0
+    if inset is not None and (bot - (HEADER_H + TILES_H + INSET_H)) >= MIN_PLOT_H:
+        inset_h = INSET_H
+        wh = inset_px or (inset.shape[1], inset.shape[0])
+        render_inset(panel, txt, inset, 28, HEADER_H + TILES_H + 6,
+                     PLOT_W - 28 * 2, INSET_H - 18, inset_auto, wh)
+
+    # ── Plot box ──
+    top = HEADER_H + TILES_H + inset_h
     if bot - top < 60:
         return panel, None
 
@@ -946,6 +1059,9 @@ def main():
     # Typed position entry ('m'): None = normal keys; a string = what's been
     # typed so far (a leading +/- makes it a relative move).
     entry = None
+    # 'i': percentile-stretch the magnified patch inset so faint fringes show.
+    # Off by default — the inset then matches the live view exactly.
+    inset_auto = False
     notice = None        # transient status-bar message: (text, expires_at)
     # plot_view["range"]: (xmin, xmax) zoom of the plot, None = auto-fit.
     # plot_view["drawn"]: the range actually rendered last frame (needed to map
@@ -1145,11 +1261,9 @@ def main():
 
             # ── Patch amplitude on the RAW frame (full bit depth, no gamma) ──
             if selector.rect is not None:
-                x0, y0, x1, y1 = selector.rect
-                fh, fw = frame.shape[:2]
-                x0, x1 = np.clip((x0, x1), 0, fw)
-                y0, y1 = np.clip((y0, y1), 0, fh)
-                if x1 - x0 >= 2 and y1 - y0 >= 2:
+                box = clip_rect(selector.rect, frame.shape)
+                if box is not None:
+                    x0, y0, x1, y1 = box
                     # x-coordinate: stage position if available, else frame index.
                     # While the stage is in motion the 10 Hz cached position is
                     # up to 100 ms stale (directionally biased against the
@@ -1212,6 +1326,19 @@ def main():
                         print(f"Fine scan move failed: {e}")
                         scan = None
 
+            # ── Magnified-patch crop — MUST happen before the resize below ──
+            # frame_display is overwritten with the screen-fitted downscale; a
+            # crop taken from that and magnified back up is interpolated mush,
+            # with none of the fringes or speckle the inset exists to show. Uses
+            # preview_rect so the inset also tracks the box being dragged out.
+            inset = inset_px = None
+            box = clip_rect(selector.preview_rect(), frame.shape)
+            if box is not None:
+                x0, y0, x1, y1 = box
+                inset_px = (x1 - x0, y1 - y0)      # true size, before any decimation
+                inset = (stretch_patch(frame[y0:y1, x0:x1], gamma) if inset_auto
+                         else frame_display[y0:y1, x0:x1])
+
             # Scale down to fit the screen while preserving aspect ratio.
             # Resize the single-channel image, THEN expand to BGR — at full
             # sensor resolution this is 3x less data through the resize.
@@ -1257,7 +1384,9 @@ def main():
                                         view=plot_view["range"],
                                         has_stage=stage is not None,
                                         cache=panel_cache,
-                                        version=samples_version)
+                                        version=samples_version,
+                                        inset=inset, inset_auto=inset_auto,
+                                        inset_px=inset_px)
             plot_view["drawn"] = drawn
             canvas = np.hstack([frame_rgb, panel])
             # Status-bar banner: fine-scan progress, or a transient notice.
@@ -1365,6 +1494,11 @@ def main():
                                       f"{n_steps} steps of "
                                       f"{fine_step * 1000:.0f} µm "
                                       f"(est ~{est_s:.0f}s). Press f to cancel.")
+                elif k == ord('i'):
+                    inset_auto = not inset_auto
+                    print("Patch inset: auto-contrast (stretched — exaggerates "
+                          "contrast and hides saturation)" if inset_auto else
+                          "Patch inset: true levels (matches the live view)")
                 elif k == ord('m'):
                     if stage is None:
                         notice = ("no stage to move", now + 4)
